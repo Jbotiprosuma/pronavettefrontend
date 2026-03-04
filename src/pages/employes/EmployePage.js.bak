@@ -1,0 +1,623 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import api from '../../axios';
+import { useNavigate, Link } from 'react-router-dom';
+import Loading from '../../components/base/Loading';
+import AlertMessages from '../../components/base/AlertMessages';
+import Layout from '../../components/base/Layout';
+import { useAuth } from '../../context/AuthContext';
+import ImportEmployerModal from '../../components/employes/ImportEmployerModal';
+import Swal from 'sweetalert2';
+import moment from 'moment';
+
+/* ────────────────────────────────────────────
+   CONSTANTES
+   ──────────────────────────────────────────── */
+const STATUS_BADGE = {
+    'Activé': { bg: 'bg-success-subtle', text: 'text-success', icon: 'ri-checkbox-circle-line' },
+    'Désactivé': { bg: 'bg-danger-subtle', text: 'text-danger', icon: 'ri-close-circle-line' },
+};
+const GENRE_ICON = { Homme: 'ri-men-line', Femme: 'ri-women-line' };
+
+/* ────────────────────────────────────────────
+   COMPOSANT PRINCIPAL
+   ──────────────────────────────────────────── */
+const EmployePage = () => {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    // Data
+    const [employes, setEmployes] = useState([]);
+    const [trashed, setTrashed] = useState([]);
+    const [services, setServices] = useState([]);
+
+    // UI State
+    const [loadingData, setLoadingData] = useState(true);
+    const [alert, setAlert] = useState(null);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('actifs'); // actifs | corbeille
+
+    // Filtres
+    const [search, setSearch] = useState('');
+    const [filterService, setFilterService] = useState('');
+    const [filterGenre, setFilterGenre] = useState('');
+    const [filterCadre, setFilterCadre] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
+
+    // Selection
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [selectAll, setSelectAll] = useState(false);
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 50;
+
+    /* ── FETCH ── */
+    const fetchEmployes = useCallback(async () => {
+        try {
+            const [empRes, srvRes] = await Promise.all([
+                api.get('employes'),
+                api.get('services'),
+            ]);
+            setEmployes(empRes.data.data || []);
+            setServices(srvRes.data.data || srvRes.data || []);
+        } catch {
+            setAlert({ type: 'danger', message: 'Erreur lors du chargement des employés.' });
+        } finally {
+            setLoadingData(false);
+        }
+    }, []);
+
+    const fetchTrashed = useCallback(async () => {
+        try {
+            const res = await api.get('employes/trash');
+            setTrashed(res.data.data || []);
+        } catch {
+            setAlert({ type: 'danger', message: 'Erreur lors du chargement de la corbeille.' });
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchEmployes();
+        fetchTrashed(); // Chargement initial pour afficher le compteur KPI
+    }, [fetchEmployes, fetchTrashed]);
+
+    useEffect(() => {
+        if (activeTab === 'corbeille') fetchTrashed();
+    }, [activeTab, fetchTrashed]);
+
+    /* ── FILTRAGE ── */
+    const currentList = activeTab === 'actifs' ? employes : trashed;
+
+    const filtered = useMemo(() => {
+        return currentList.filter(emp => {
+            if (search) {
+                const s = search.toLowerCase();
+                const haystack = [emp.matricule, emp.nom, emp.prenom, emp.email, emp.poste_occupe, emp.service?.name]
+                    .filter(Boolean).join(' ').toLowerCase();
+                if (!haystack.includes(s)) return false;
+            }
+            if (filterService && String(emp.service_id) !== filterService) return false;
+            if (filterGenre && emp.genre !== filterGenre) return false;
+            if (filterCadre !== '' && String(emp.is_cadre) !== filterCadre) return false;
+            if (filterStatus && emp.status !== filterStatus) return false;
+            return true;
+        });
+    }, [currentList, search, filterService, filterGenre, filterCadre, filterStatus]);
+
+    // Pagination
+    const totalPages = Math.ceil(filtered.length / pageSize);
+    const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    useEffect(() => { setCurrentPage(1); }, [search, filterService, filterGenre, filterCadre, filterStatus, activeTab]);
+    useEffect(() => { setSelectedIds(new Set()); setSelectAll(false); }, [activeTab]);
+
+    /* ── SELECTION ── */
+    const handleToggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectAll) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filtered.map(e => e.id)));
+        }
+        setSelectAll(!selectAll);
+    };
+
+    /* ── ACTIONS ── */
+    const handleDelete = async (slug) => {
+        const result = await Swal.fire({
+            title: 'Supprimer cet employé ?',
+            text: 'Il sera placé dans la corbeille.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#405189',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler'
+        });
+        if (!result.isConfirmed) return;
+        try {
+            await api.delete(`employes/${slug}`);
+            Swal.fire({ icon: 'success', title: 'Supprimé !', timer: 1500, showConfirmButton: false });
+            fetchEmployes();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || 'Erreur' });
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.size === 0) return;
+        const result = await Swal.fire({
+            title: `Supprimer ${selectedIds.size} employé(s) ?`,
+            text: 'Ils seront placés dans la corbeille.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#405189',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler'
+        });
+        if (!result.isConfirmed) return;
+        try {
+            await api.post('employes/bulk-delete', { ids: [...selectedIds] });
+            Swal.fire({ icon: 'success', title: 'Supprimés !', timer: 1500, showConfirmButton: false });
+            setSelectedIds(new Set()); setSelectAll(false);
+            fetchEmployes();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || 'Erreur' });
+        }
+    };
+
+    const handleRestore = async (id) => {
+        try {
+            await api.post(`employes/${id}/restore`);
+            Swal.fire({ icon: 'success', title: 'Restauré !', timer: 1500, showConfirmButton: false });
+            fetchTrashed(); fetchEmployes();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || 'Erreur' });
+        }
+    };
+
+    const handleBulkRestore = async () => {
+        if (selectedIds.size === 0) return;
+        try {
+            await api.post('employes/bulk-restore', { ids: [...selectedIds] });
+            Swal.fire({ icon: 'success', title: 'Restaurés !', timer: 1500, showConfirmButton: false });
+            setSelectedIds(new Set()); setSelectAll(false);
+            fetchTrashed(); fetchEmployes();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || 'Erreur' });
+        }
+    };
+
+    const handleToggleStatus = async (slug) => {
+        try {
+            await api.patch(`employes/${slug}/toggle-status`);
+            Swal.fire({ icon: 'success', title: 'Statut mis à jour !', timer: 1500, showConfirmButton: false });
+            fetchEmployes();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || 'Erreur' });
+        }
+    };
+
+    const handleExport = async () => {
+        try {
+            const response = await api.get('employes/export', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `employes_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setAlert({ type: 'danger', message: "Erreur lors de l'export." });
+        }
+    };
+
+    const handleImportSubmit = async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await api.post('employes/import', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            let msg = response.data.message + (response.data.summary ? ` • ${response.data.summary}` : '');
+            if (response.data.details?.length) {
+                const errs = response.data.details.filter(d => d.type === 'erreur');
+                const warns = response.data.details.filter(d => d.type === 'avertissement');
+                if (errs.length) {
+                    const lines = errs.slice(0, 5).map(e => `• [${e.matricule || '?'}] ${e.message}`).join('\n');
+                    const more = errs.length > 5 ? `\n... et ${errs.length - 5} autre(s)` : '';
+                    msg += `\n\nLignes ignorées :\n${lines}${more}`;
+                }
+                if (warns.length) {
+                    const lines = warns.slice(0, 5).map(w => `• [${w.matricule || '?'}] ${w.message}`).join('\n');
+                    const more = warns.length > 5 ? `\n... et ${warns.length - 5} autre(s)` : '';
+                    msg += `\n\nAvertissements :\n${lines}${more}`;
+                }
+            }
+            setAlert({ type: 'success', message: msg });
+            fetchEmployes();
+        } catch (error) {
+            setAlert({ type: 'danger', message: error.response?.data?.message || "Erreur lors de l'import." });
+            throw error;
+        }
+    };
+
+    const clearFilters = () => {
+        setSearch(''); setFilterService(''); setFilterGenre('');
+        setFilterCadre(''); setFilterStatus('');
+    };
+
+    const hasActiveFilters = search || filterService || filterGenre || filterCadre !== '' || filterStatus;
+
+    /* ── RENDER ── */
+    if (loadingData || !user) return <Loading loading={true} />;
+
+    return (
+        <>
+            <Layout>
+                {/* Breadcrumb */}
+                <div className="row">
+                    <div className="col-12">
+                        <div className="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 className="mb-sm-0">Gestion des employés</h4>
+                            <div className="page-title-right">
+                                <ol className="breadcrumb m-0">
+                                    <li className="breadcrumb-item"><a href="/dashboard">Tableau de bord</a></li>
+                                    <li className="breadcrumb-item active">Employés</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <AlertMessages alert={alert} setAlert={setAlert} />
+
+                {/* KPI Cards */}
+                <div className="row">
+                    {[
+                        { label: 'Total Actifs', value: employes.length, icon: 'ri-team-line', color: 'primary' },
+                        { label: 'Hommes', value: employes.filter(e => e.genre === 'Homme').length, icon: 'ri-men-line', color: 'primary' },
+                        { label: 'Femmes', value: employes.filter(e => e.genre === 'Femme').length, icon: 'ri-women-line', color: 'danger' },
+                        { label: 'Corbeille', value: trashed.length, icon: 'ri-delete-bin-line', color: 'warning', onClick: () => { setActiveTab('corbeille'); fetchTrashed(); } },
+                    ].map((kpi, i) => (
+                        <div className="col-xl-3 col-md-6" key={i}>
+                            <div className="card card-animate" style={{ cursor: kpi.onClick ? 'pointer' : 'default' }} onClick={kpi.onClick}>
+                                <div className="card-body">
+                                    <div className="d-flex align-items-center">
+                                        <div className="flex-grow-1">
+                                            <p className="text-uppercase fw-medium text-muted mb-0">{kpi.label}</p>
+                                        </div>
+                                    </div>
+                                    <div className="d-flex align-items-end justify-content-between mt-3">
+                                        <div>
+                                            <h4 className={`fs-22 fw-semibold mb-0 text-${kpi.color}`}>{kpi.value}</h4>
+                                        </div>
+                                        <div className="avatar-sm flex-shrink-0">
+                                            <span className={`avatar-title bg-${kpi.color}-subtle rounded fs-3`}>
+                                                <i className={`${kpi.icon}`}></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Main Card */}
+                <div className="card">
+                    <div className="card-header border-0">
+                        <div className="d-flex align-items-center flex-wrap gap-2">
+                            {/* Tabs */}
+                            <ul className="nav nav-tabs-custom card-header-tabs border-bottom-0 me-auto" role="tablist">
+                                <li className="nav-item">
+                                    <button className={`nav-link fw-semibold ${activeTab === 'actifs' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('actifs')}>
+                                        <i className="ri-team-line me-1"></i> Actifs
+                                        <span className="badge bg-success-subtle text-success ms-1">{employes.length}</span>
+                                    </button>
+                                </li>
+                                <li className="nav-item">
+                                    <button className={`nav-link fw-semibold ${activeTab === 'corbeille' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('corbeille')}>
+                                        <i className="ri-delete-bin-line me-1"></i> Corbeille
+                                        {trashed.length > 0 && (
+                                            <span className="badge bg-danger-subtle text-danger ms-1">{trashed.length}</span>
+                                        )}
+                                    </button>
+                                </li>
+                            </ul>
+
+                            {/* Actions rapides */}
+                            <div className="d-flex gap-2 flex-wrap">
+                                {activeTab === 'actifs' && (
+                                    <>
+                                        <button className="btn btn-sm btn-outline-info" title="Télécharger le template"
+                                            onClick={() => {
+                                                const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api/';
+                                                const token = localStorage.getItem('token');
+                                                window.open(`${baseURL}navettes/template-employes?token=${token}`, '_blank');
+                                            }}>
+                                            <i className="ri-download-2-line me-1"></i> Template
+                                        </button>
+                                        <button className="btn btn-sm btn-outline-success" onClick={handleExport}>
+                                            <i className="ri-file-excel-2-line me-1"></i> Exporter
+                                        </button>
+                                        <button className="btn btn-sm btn-primary" onClick={() => setShowImportModal(true)}>
+                                            <i className="ri-upload-2-line me-1"></i> Importer
+                                        </button>
+                                        <button className="btn btn-sm btn-success" onClick={() => navigate('/employes/create')}>
+                                            <i className="ri-add-line me-1"></i> Nouvel employé
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card-body">
+                        {/* Barre de recherche + filtres */}
+                        <div className="row g-3 mb-3">
+                            <div className="col-md-4">
+                                <div className="search-box">
+                                    <input type="text" className="form-control search"
+                                        placeholder="Rechercher (nom, matricule, email, fonction...)"
+                                        value={search} onChange={e => setSearch(e.target.value)} />
+                                    <i className="ri-search-line search-icon"></i>
+                                </div>
+                            </div>
+                            <div className="col-md-auto d-flex gap-2 align-items-center ms-auto flex-wrap">
+                                <button className={`btn btn-sm ${showFilters ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                    onClick={() => setShowFilters(!showFilters)}>
+                                    <i className="ri-filter-3-line me-1"></i>
+                                    Filtres {hasActiveFilters && <span className="badge bg-warning ms-1">!</span>}
+                                </button>
+                                {hasActiveFilters && (
+                                    <button className="btn btn-sm btn-outline-danger" onClick={clearFilters}>
+                                        <i className="ri-close-line me-1"></i> Réinitialiser
+                                    </button>
+                                )}
+
+                                {/* Bulk actions */}
+                                {selectedIds.size > 0 && (
+                                    <div className="d-flex gap-2 align-items-center border-start ps-2 ms-2">
+                                        <span className="badge bg-primary fs-12">{selectedIds.size} sélectionné(s)</span>
+                                        {activeTab === 'actifs' ? (
+                                            <button className="btn btn-sm btn-danger" onClick={handleBulkDelete}>
+                                                <i className="ri-delete-bin-line me-1"></i> Supprimer
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-sm btn-success" onClick={handleBulkRestore}>
+                                                <i className="ri-refresh-line me-1"></i> Restaurer
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Panneau filtres avancés */}
+                        {showFilters && (
+                            <div className="row g-3 mb-3 p-3 bg-light rounded">
+                                <div className="col-md-3">
+                                    <label className="form-label fw-medium">Service</label>
+                                    <select className="form-select form-select-sm" value={filterService}
+                                        onChange={e => setFilterService(e.target.value)}>
+                                        <option value="">Tous les services</option>
+                                        {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-md-2">
+                                    <label className="form-label fw-medium">Genre</label>
+                                    <select className="form-select form-select-sm" value={filterGenre}
+                                        onChange={e => setFilterGenre(e.target.value)}>
+                                        <option value="">Tous</option>
+                                        <option value="Homme">Homme</option>
+                                        <option value="Femme">Femme</option>
+                                    </select>
+                                </div>
+                                <div className="col-md-2">
+                                    <label className="form-label fw-medium">Cadre</label>
+                                    <select className="form-select form-select-sm" value={filterCadre}
+                                        onChange={e => setFilterCadre(e.target.value)}>
+                                        <option value="">Tous</option>
+                                        <option value="true">Cadre</option>
+                                        <option value="false">Non cadre</option>
+                                    </select>
+                                </div>
+                                {activeTab === 'actifs' && (
+                                    <div className="col-md-2">
+                                        <label className="form-label fw-medium">Statut</label>
+                                        <select className="form-select form-select-sm" value={filterStatus}
+                                            onChange={e => setFilterStatus(e.target.value)}>
+                                            <option value="">Tous</option>
+                                            <option value="Activé">Activé</option>
+                                            <option value="Désactivé">Désactivé</option>
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="col-md-3 d-flex align-items-end">
+                                    <span className="text-muted fs-12">
+                                        <i className="ri-information-line me-1"></i>
+                                        {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Table */}
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle table-nowrap mb-0">
+                                <thead className="table-light">
+                                    <tr>
+                                        <th style={{ width: 40 }}>
+                                            <input type="checkbox" className="form-check-input"
+                                                checked={selectAll && filtered.length > 0}
+                                                onChange={handleSelectAll} />
+                                        </th>
+                                        <th style={{ width: 50 }}>#</th>
+                                        <th>Employé</th>
+                                        <th>Matricule</th>
+                                        <th>Fonction</th>
+                                        <th>Service</th>
+                                        <th>Genre</th>
+                                        <th>Cadre</th>
+                                        {activeTab === 'actifs' ? <th>Statut</th> : <th>Supprimé le</th>}
+                                        <th style={{ width: 160 }}>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paged.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={10} className="text-center text-muted py-4">
+                                                <i className="ri-inbox-line fs-24 d-block mb-2"></i>
+                                                {activeTab === 'corbeille' ? 'La corbeille est vide.' : 'Aucun employé trouvé.'}
+                                            </td>
+                                        </tr>
+                                    ) : paged.map((emp, idx) => {
+                                        const stBadge = STATUS_BADGE[emp.status] || STATUS_BADGE['Activé'];
+                                        return (
+                                            <tr key={emp.id} className={selectedIds.has(emp.id) ? 'table-active' : ''}>
+                                                <td>
+                                                    <input type="checkbox" className="form-check-input"
+                                                        checked={selectedIds.has(emp.id)}
+                                                        onChange={() => handleToggleSelect(emp.id)} />
+                                                </td>
+                                                <td className="fw-medium">{(currentPage - 1) * pageSize + idx + 1}</td>
+                                                <td>
+                                                    <div className="d-flex align-items-center">
+                                                        <img src={emp.avatar_url} alt="" className="avatar-xs rounded-circle me-2" />
+                                                        <div>
+                                                            <Link to={`/employes/detail/${emp.slug}`} className="fw-medium text-reset">
+                                                                {emp.nom} {emp.prenom}
+                                                            </Link>
+                                                            {emp.email && <small className="d-block text-muted">{emp.email}</small>}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td><span className="badge bg-secondary-subtle text-secondary">{emp.matricule}</span></td>
+                                                <td>{emp.poste_occupe || <span className="text-muted">—</span>}</td>
+                                                <td>
+                                                    {emp.service?.name ? (
+                                                        <span className="badge bg-info-subtle text-info">{emp.service.name}</span>
+                                                    ) : <span className="text-muted">—</span>}
+                                                </td>
+                                                <td>
+                                                    {emp.genre ? (
+                                                        <span><i className={`${GENRE_ICON[emp.genre] || ''} me-1`}></i>{emp.genre}</span>
+                                                    ) : '—'}
+                                                </td>
+                                                <td>
+                                                    {emp.is_cadre ? (
+                                                        <span className="badge bg-primary-subtle text-primary">Cadre</span>
+                                                    ) : (
+                                                        <span className="badge bg-light text-muted">Non cadre</span>
+                                                    )}
+                                                </td>
+                                                {activeTab === 'actifs' ? (
+                                                    <td>
+                                                        <span className={`badge ${stBadge.bg} ${stBadge.text}`}>
+                                                            <i className={`${stBadge.icon} me-1`}></i>{emp.status}
+                                                        </span>
+                                                    </td>
+                                                ) : (
+                                                    <td>
+                                                        <span className="text-muted fs-12">
+                                                            {emp.deleted_at ? moment(emp.deleted_at).format('DD/MM/YYYY HH:mm') : '—'}
+                                                        </span>
+                                                    </td>
+                                                )}
+                                                <td>
+                                                    {activeTab === 'actifs' ? (
+                                                        <div className="d-flex gap-1">
+                                                            <Link to={`/employes/detail/${emp.slug}`}
+                                                                className="btn btn-sm btn-soft-info" title="Détails">
+                                                                <i className="ri-eye-line"></i>
+                                                            </Link>
+                                                            <button className="btn btn-sm btn-soft-primary" title="Modifier"
+                                                                onClick={() => navigate(`/employes/edit/${emp.slug}`)}>
+                                                                <i className="ri-pencil-line"></i>
+                                                            </button>
+                                                            <button className="btn btn-sm btn-soft-warning" title="Changer statut"
+                                                                onClick={() => handleToggleStatus(emp.slug)}>
+                                                                <i className={`ri-${emp.status === 'Activé' ? 'eye-off-line' : 'eye-line'}`}></i>
+                                                            </button>
+                                                            <button className="btn btn-sm btn-soft-danger" title="Supprimer"
+                                                                onClick={() => handleDelete(emp.slug)}>
+                                                                <i className="ri-delete-bin-line"></i>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="d-flex gap-1">
+                                                            <button className="btn btn-sm btn-soft-success" title="Restaurer"
+                                                                onClick={() => handleRestore(emp.id)}>
+                                                                <i className="ri-refresh-line me-1"></i> Restaurer
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="d-flex justify-content-between align-items-center mt-3">
+                                <div className="text-muted fs-12">
+                                    {filtered.length} résultat{filtered.length !== 1 ? 's' : ''} — Page {currentPage}/{totalPages}
+                                </div>
+                                <ul className="pagination pagination-sm mb-0">
+                                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                        <button className="page-link" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>
+                                            <i className="ri-arrow-left-s-line"></i>
+                                        </button>
+                                    </li>
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let page;
+                                        if (totalPages <= 5) page = i + 1;
+                                        else if (currentPage <= 3) page = i + 1;
+                                        else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
+                                        else page = currentPage - 2 + i;
+                                        return (
+                                            <li className={`page-item ${page === currentPage ? 'active' : ''}`} key={page}>
+                                                <button className="page-link" onClick={() => setCurrentPage(page)}>{page}</button>
+                                            </li>
+                                        );
+                                    })}
+                                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                        <button className="page-link" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>
+                                            <i className="ri-arrow-right-s-line"></i>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Layout>
+
+            <ImportEmployerModal
+                show={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImportSubmit={handleImportSubmit}
+                alert={setAlert}
+            />
+        </>
+    );
+};
+
+export default EmployePage;

@@ -1,0 +1,35 @@
+/* Sidebar scrollbar fix */
+.app-menu.navbar-menu {
+    display: flex !important;
+    flex-direction: column !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+}
+
+.app-menu .navbar-brand-box {
+    flex-shrink: 0 !important;
+}
+
+.app-menu #scrollbar {
+    
+    flex: 1 1 0% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    min-height: 0 !important;
+    padding-bottom: 80px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.app-menu #scrollbar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.app-menu #scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+}
+
+.app-menu #scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
