@@ -172,7 +172,7 @@ const EmployePage = () => {
                     </div>
                     <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
                         {activeTab==='actifs' && <>
-                            <button onClick={()=>{const b=process.env.REACT_APP_API_URL||'http://localhost:4000/api/';const t=localStorage.getItem('token');window.open(`${b}navettes/template-employes?token=${t}`,'_blank');}} style={{background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',color:'#fff',borderRadius:10,padding:'9px 18px',cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
+                            <button onClick={()=>{const b=process.env.REACT_APP_API_URL||'http://10.0.80.41:4000/api/';const t=localStorage.getItem('token');window.open(`${b}navettes/template-employes?token=${t}`,'_blank');}} style={{background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',color:'#fff',borderRadius:10,padding:'9px 18px',cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
                                 <i className="ri-download-2-line"></i> Template
                             </button>
                             <button onClick={handleExport} style={{background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',color:'#fff',borderRadius:10,padding:'9px 18px',cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6}}>

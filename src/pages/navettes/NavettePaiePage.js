@@ -426,7 +426,7 @@ const NavettePaiePage = () => {
                             </div>
                             <div className="d-flex justify-content-end gap-2 mt-2 pt-2 border-top">
                                 <button type="button" className="btn btn-sm btn-success" onClick={() => {
-                                    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api/';
+                                    const baseURL = process.env.REACT_APP_API_URL || 'http://10.0.80.41:4000/api/';
                                     const token = localStorage.getItem('token');
                                     window.open(`${baseURL}navettes/${navette.id}/export-sage?token=${token}`, '_blank');
                                 }}>
