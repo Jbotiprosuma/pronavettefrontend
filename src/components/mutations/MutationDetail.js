@@ -7,9 +7,9 @@ import Loading from '../base/Loading';
 const CLR = { primary:'#405189', success:'#0ab39c', warning:'#f7b84b', danger:'#f06548', info:'#299cdb', secondary:'#878a99' };
 const STATUS_CFG = {
     'En attente': { color:CLR.warning, icon:'ri-time-line',         label:'En attente'  },
-    'Valid\u00e9':     { color:CLR.success, icon:'ri-check-double-line', label:'Valid\u00e9'      },
-    'Rejet\u00e9':     { color:CLR.danger,  icon:'ri-close-circle-line', label:'Rejet\u00e9'      },
-    'Annul\u00e9':     { color:CLR.secondary,icon:'ri-forbid-line',      label:'Annul\u00e9'      },
+    'Validé':     { color:CLR.success, icon:'ri-check-double-line', label:'Validé'      },
+    'Rejeté':     { color:CLR.danger,  icon:'ri-close-circle-line', label:'Rejeté'      },
+    'Annulé':     { color:CLR.secondary,icon:'ri-forbid-line',      label:'Annulé'      },
 };
 const fmtD = d => d ? new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}) : '-';
 const fmtMY = d => d ? new Date(d).toLocaleDateString('fr-FR',{year:'numeric',month:'long'}) : '-';
@@ -37,7 +37,7 @@ const MutationDetail = () => {
     const fetchMutation = async () => {
         setLoading(true);
         try { const r = await api.get(`/mutations/${id}`); setMutation(r.data.data); setError(null); }
-        catch(err) { const m=err.response?.data?.message||'Impossible de charger les d\u00e9tails.'; Swal.fire('Erreur',m,'error'); setError(m); }
+        catch(err) { const m=err.response?.data?.message||'Impossible de charger les détails.'; Swal.fire('Erreur',m,'error'); setError(m); }
         finally { setLoading(false); }
     };
     useEffect(() => { fetchMutation(); }, [id]); // eslint-disable-line
@@ -46,13 +46,13 @@ const MutationDetail = () => {
         const r = await Swal.fire({ title, text, icon:'question', showCancelButton:true, confirmButtonText:'Confirmer', cancelButtonText:'Annuler', confirmButtonColor:CLR.primary });
         if(!r.isConfirmed) return;
         setActionLoading(true);
-        try { await api.patch(url); Swal.fire('Succ\u00e8s',msg,'success'); await fetchMutation(); }
+        try { await api.patch(url); Swal.fire('Succès',msg,'success'); await fetchMutation(); }
         catch(err) { Swal.fire('Erreur',err.response?.data?.message||'Erreur.','error'); }
         finally { setActionLoading(false); }
     };
-    const handleConfirm=()=>doAction(`/mutations/${id}/confirm`,'Valider la mutation ?',"La mutation passera au statut 'Valid\u00e9'.",'Mutation valid\u00e9e.');
-    const handleReject =()=>doAction(`/mutations/${id}/reject`,'Rejeter la mutation ?',"La mutation passera au statut 'Rejet\u00e9'.",'Mutation rejet\u00e9e.');
-    const handleReset  =()=>doAction(`/mutations/${id}/reset`,'Annuler la mutation ?',"La mutation passera au statut 'Annul\u00e9'.",'Mutation annul\u00e9e.');
+    const handleConfirm=()=>doAction(`/mutations/${id}/confirm`,'Valider la mutation ?',"La mutation passera au statut 'Validé'.",'Mutation validée.');
+    const handleReject =()=>doAction(`/mutations/${id}/reject`,'Rejeter la mutation ?',"La mutation passera au statut 'Rejeté'.",'Mutation rejetée.');
+    const handleReset  =()=>doAction(`/mutations/${id}/reset`,'Annuler la mutation ?',"La mutation passera au statut 'Annulé'.",'Mutation annulée.');
 
     if(loading) return <Loading loading={true}/>;
     if(error) return <div style={{textAlign:'center',padding:'60px 20px'}}><i className="ri-error-warning-line" style={{fontSize:56,color:'#e9ebec'}}></i><h5 style={{color:'#878a99',marginTop:16}}>{error}</h5><button onClick={()=>navigate('/mutations')} style={{background:CLR.primary,color:'#fff',border:'none',borderRadius:10,padding:'9px 18px',cursor:'pointer',fontWeight:600,fontSize:13,marginTop:8}}><i className="ri-arrow-left-line" style={{marginRight:6}}></i>Retour</button></div>;
@@ -63,12 +63,12 @@ const MutationDetail = () => {
     const isPending = status==='En attente';
 
     const steps = [
-        { label:'Cr\u00e9\u00e9e',  icon:'ri-add-circle-line' },
+        { label:'Créée',  icon:'ri-add-circle-line' },
         { label:'En attente', icon:'ri-time-line' },
-        { label:status==='En attente'?'D\u00e9cision':status, icon:cfg.icon },
-        { label:'Appliqu\u00e9e',  icon:'ri-check-double-line' },
+        { label:status==='En attente'?'Décision':status, icon:cfg.icon },
+        { label:'Appliquée',  icon:'ri-check-double-line' },
     ];
-    const stepIdx = status==='En attente'?1:status==='Valid\u00e9'?(is_apply?3:2):2;
+    const stepIdx = status==='En attente'?1:status==='Validé'?(is_apply?3:2):2;
     const initials = (employer?.prenom?.[0]||'')+(employer?.nom?.[0]||'');
 
     return (
@@ -140,11 +140,11 @@ const MutationDetail = () => {
                                 </div>
                             </div>
                             {[
-                                ['P\u00e9riode', fmtMY(periode_at), 'ri-calendar-line'],
-                                ['D\u00e9part', fmtD(depart_at), 'ri-flight-takeoff-line'],
-                                ['Arriv\u00e9e', fmtD(arrivee_at), 'ri-flight-land-line'],
-                                ['Navette', navette?.name||'Non assign\u00e9e', 'ri-bus-line'],
-                                ['Appliqu\u00e9e', is_apply?'Oui':'Non', 'ri-check-line'],
+                                ['Période', fmtMY(periode_at), 'ri-calendar-line'],
+                                ['Départ', fmtD(depart_at), 'ri-flight-takeoff-line'],
+                                ['Arrivée', fmtD(arrivee_at), 'ri-flight-land-line'],
+                                ['Navette', navette?.name||'Non assignée', 'ri-bus-line'],
+                                ['Appliquée', is_apply?'Oui':'Non', 'ri-check-line'],
                             ].map(([label,val,icon],i)=>(
                                 <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:i<4?'1px solid #f3f3f9':'none'}}>
                                     <span style={{fontSize:13,color:'#878a99',display:'flex',alignItems:'center',gap:6}}><i className={icon} style={{fontSize:15}}></i>{label}</span>
@@ -167,7 +167,7 @@ const MutationDetail = () => {
                                     <i className="ri-add-circle-line"></i>
                                 </div>
                                 <div>
-                                    <div style={{fontSize:11,color:'#878a99'}}>Cr\u00e9\u00e9e par</div>
+                                    <div style={{fontSize:11,color:'#878a99'}}>Créée par</div>
                                     <div style={{fontSize:13,fontWeight:600,color:'#495057'}}>{createdby?.prenom} {createdby?.nom}</div>
                                     <div style={{fontSize:11,color:'#878a99'}}>{fmtD(mutation.created_at)}</div>
                                 </div>
@@ -190,7 +190,7 @@ const MutationDetail = () => {
                                         <i className="ri-pencil-line"></i>
                                     </div>
                                     <div>
-                                        <div style={{fontSize:11,color:'#878a99'}}>Derni\u00e8re modification</div>
+                                        <div style={{fontSize:11,color:'#878a99'}}>Dernière modification</div>
                                         <div style={{fontSize:11,color:'#878a99'}}>{fmtD(mutation.updated_at)}</div>
                                     </div>
                                 </div>
@@ -234,14 +234,14 @@ const MutationDetail = () => {
                 </div>
             </div>
 
-            {/* R\u00e9capitulatif Paie */}
+            {/* Récapitulatif Paie */}
             <div style={{background:'#fff',borderRadius:14,boxShadow:'0 2px 12px rgba(0,0,0,.06)',overflow:'hidden',marginBottom:28}}>
                 <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f3f9',fontWeight:700,fontSize:14,color:'#495057'}}>
-                    <i className="ri-bar-chart-line" style={{marginRight:8,color:CLR.success}}></i>R\u00e9capitulatif Paie
+                    <i className="ri-bar-chart-line" style={{marginRight:8,color:CLR.success}}></i>Récapitulatif Paie
                 </div>
                 <div style={{padding:20}}>
                     <div className="row g-3">
-                        <div className="col-6 col-md-3"><KpiCard icon="ri-calendar-check-line" label="Jours travaill\u00e9s" value={nb_jours_job} unit="j" color={CLR.primary}/></div>
+                        <div className="col-6 col-md-3"><KpiCard icon="ri-calendar-check-line" label="Jours travaillés" value={nb_jours_job} unit="j" color={CLR.primary}/></div>
                         <div className="col-6 col-md-3"><KpiCard icon="ri-calendar-line" label="Jours d'absence" value={nb_jour_abs} unit="j" color={CLR.danger}/></div>
                         <div className="col-6 col-md-3"><KpiCard icon="ri-money-dollar-box-line" label="Acompte" value={accompte?.toLocaleString('fr-FR')} unit="FCFA" color={CLR.success}/></div>
                         <div className="col-6 col-md-3"><KpiCard icon="ri-moon-line" label="Prime Nuit" value={prime_nuit} unit="j" color={CLR.info}/></div>

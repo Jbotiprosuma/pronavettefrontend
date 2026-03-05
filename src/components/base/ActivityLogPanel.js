@@ -156,7 +156,7 @@ const ActivityLogPanel = ({ module, targetId = null, isAdmin = false, defaultLim
         montant: 'Montant', type_prime: 'Type prime', nb_jour: 'Nb jours nuit',
         date_depart: 'Date départ', type_depart: 'Type départ',
         nouvelle_date_fin: 'Nouvelle fin', nouvelle_date_debut: 'Nouveau début',
-        confirmed_by: 'Confirmé par', rejet_motif: 'Motif rejet',
+        confirmed_by: 'Confirmé par',
         matricule: 'Matricule', nom: 'Nom', prenom: 'Prénom',
         ids: 'IDs', created: 'Créés', updated: 'Mis à jour', errors: 'Erreurs',
         count: 'Nb éléments', statut: 'Statut',

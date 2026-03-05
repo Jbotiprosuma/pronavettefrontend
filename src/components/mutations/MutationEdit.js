@@ -42,7 +42,7 @@ const MutationEdit = () => {
                 const [mR,sR,nR] = await Promise.all([api.get(`/mutations/${id}`),api.get('/services'),api.get('/navettes')]);
                 const d = mR.data.data;
                 if(d.status!=='En attente') {
-                    Swal.fire({icon:'warning',title:'Modification impossible',text:`Statut "${d.status}" ne peut plus \u00eatre modifi\u00e9.`,confirmButtonText:'OK'});
+                    Swal.fire({icon:'warning',title:'Modification impossible',text:`Statut "${d.status}" ne peut plus être modifié.`,confirmButtonText:'OK'});
                     navigate('/mutations'); return;
                 }
                 setMutation(d);
@@ -96,7 +96,7 @@ const MutationEdit = () => {
 
     const handleSubmit = async e => {
         e.preventDefault();
-        if(!formData.service_new_id||!formData.periode_at) { Swal.fire('Champs manquants','Veuillez renseigner le nouveau service et la p\u00e9riode.','warning'); return; }
+        if(!formData.service_new_id||!formData.periode_at) { Swal.fire('Champs manquants','Veuillez renseigner le nouveau service et la période.','warning'); return; }
         setSaving(true);
         try {
             await api.put(`/mutations/${id}`, {
@@ -107,7 +107,7 @@ const MutationEdit = () => {
                 accompte:formData.accompte||0, prime_nuit:formData.prime_nuit||0,
                 heure_sup_15:formData.heure_sup_15||0, heure_sup_50:formData.heure_sup_50||0, heure_sup_75:formData.heure_sup_75||0,
             });
-            Swal.fire('Succ\u00e8s','Mutation mise \u00e0 jour.','success'); navigate('/mutations');
+            Swal.fire('Succès','Mutation mise à jour.','success'); navigate('/mutations');
         } catch(err) { Swal.fire('Erreur',err.response?.data?.message||'Erreur.','error'); }
         finally { setSaving(false); }
     };
@@ -149,7 +149,7 @@ const MutationEdit = () => {
                     <div className="col-lg-5">
                         <div style={{background:'#fff',borderRadius:14,boxShadow:'0 2px 12px rgba(0,0,0,.06)',overflow:'hidden'}}>
                             <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f3f9',fontWeight:700,fontSize:14,color:'#495057'}}>
-                                <i className="ri-arrow-left-right-line" style={{marginRight:8,color:CLR.primary}}></i>Mouvement & P\u00e9riode
+                                <i className="ri-arrow-left-right-line" style={{marginRight:8,color:CLR.primary}}></i>Mouvement & Période
                             </div>
                             <div style={{padding:20}}>
                                 <div style={{marginBottom:16}}>
@@ -159,21 +159,21 @@ const MutationEdit = () => {
                                 <div style={{marginBottom:16}}>
                                     <label style={labelS}>Nouveau Service <span style={{color:CLR.danger}}>*</span></label>
                                     <select name="service_new_id" value={formData.service_new_id} onChange={handleChange} required style={inputS} onFocus={focus} onBlur={blur}>
-                                        <option value="">S\u00e9lectionner...</option>
+                                        <option value="">Sélectionner...</option>
                                         {refData.services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
                                 </div>
                                 <div style={{marginBottom:16}}>
-                                    <label style={labelS}>P\u00e9riode <span style={{color:CLR.danger}}>*</span></label>
+                                    <label style={labelS}>Période <span style={{color:CLR.danger}}>*</span></label>
                                     <input type="month" name="periode_at" value={formData.periode_at} onChange={handleChange} required style={inputS} onFocus={focus} onBlur={blur}/>
                                 </div>
                                 <div className="row g-3">
                                     <div className="col-6">
-                                        <label style={labelS}>Date de d\u00e9part</label>
+                                        <label style={labelS}>Date de départ</label>
                                         <input type="date" name="depart_at" value={formData.depart_at} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-6">
-                                        <label style={labelS}>Date d'arriv\u00e9e</label>
+                                        <label style={labelS}>Date d'arrivée</label>
                                         <input type="date" name="arrivee_at" value={formData.arrivee_at} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                 </div>
@@ -186,11 +186,11 @@ const MutationEdit = () => {
                         <div style={{background:'#fff',borderRadius:14,boxShadow:'0 2px 12px rgba(0,0,0,.06)',overflow:'hidden'}}>
                             <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f3f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                                 <span style={{fontWeight:700,fontSize:14,color:'#495057'}}>
-                                    <i className="ri-bar-chart-line" style={{marginRight:8,color:CLR.success}}></i>D\u00e9tails Navette & Paie
+                                    <i className="ri-bar-chart-line" style={{marginRight:8,color:CLR.success}}></i>Détails Navette & Paie
                                 </span>
                                 <div style={{display:'flex',gap:8}}>
                                     {formData.navette_id && <span style={{background:`${CLR.success}12`,color:CLR.success,borderRadius:8,padding:'2px 10px',fontSize:11,fontWeight:600}}>Navette auto</span>}
-                                    {formData.navette_ligne_id && <span style={{background:`${CLR.success}12`,color:CLR.success,borderRadius:8,padding:'2px 10px',fontSize:11,fontWeight:600}}>Ligne pr\u00e9remplie</span>}
+                                    {formData.navette_ligne_id && <span style={{background:`${CLR.success}12`,color:CLR.success,borderRadius:8,padding:'2px 10px',fontSize:11,fontWeight:600}}>Ligne préremplie</span>}
                                 </div>
                             </div>
                             <div style={{padding:20}}>
@@ -210,7 +210,7 @@ const MutationEdit = () => {
                                         </select>
                                     </div>
                                     <div className="col-md-4">
-                                        <label style={labelS}>Jours travaill\u00e9s <span style={{fontSize:10,color:'#878a99'}}>({formData._base_jours||30} - {formData.nb_jour_abs||0} abs)</span></label>
+                                        <label style={labelS}>Jours travaillés <span style={{fontSize:10,color:'#878a99'}}>({formData._base_jours||30} - {formData.nb_jour_abs||0} abs)</span></label>
                                         <input type="number" name="nb_jours_job" value={formData.nb_jours_job} readOnly style={{...inputS,background:'#f8f9fa'}}/>
                                     </div>
                                     <div className="col-md-4">

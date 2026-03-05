@@ -11,7 +11,7 @@ moment.locale('fr');
 const CLR = { primary:'#405189', success:'#0ab39c', warning:'#f7b84b', danger:'#f06548', info:'#299cdb', secondary:'#878a99' };
 const thS = { padding:'11px 14px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, color:'#878a99', background:'#f8f9fa', borderBottom:'1.5px solid #e9ebec', whiteSpace:'nowrap' };
 const tdS = { padding:'10px 14px', fontSize:13, color:'#495057', verticalAlign:'middle' };
-const STATUS_CFG = { 'Activ\u00e9':{color:CLR.success,icon:'ri-checkbox-circle-line'},'D\u00e9sactiv\u00e9':{color:CLR.danger,icon:'ri-close-circle-line'} };
+const STATUS_CFG = { 'Activé':{color:CLR.success,icon:'ri-checkbox-circle-line'},'Désactivé':{color:CLR.danger,icon:'ri-close-circle-line'} };
 const HIST_CFG = {
     absence:{icon:'ri-calendar-line',color:CLR.danger,label:'Absence'},
     prime:{icon:'ri-money-dollar-circle-line',color:CLR.success,label:'Prime'},
@@ -19,7 +19,7 @@ const HIST_CFG = {
     heure_sup:{icon:'ri-time-line',color:CLR.info,label:'Heure sup.'},
     prime_nuit:{icon:'ri-moon-line',color:CLR.primary,label:'Prime nuit'},
     mutation:{icon:'ri-arrow-left-right-line',color:CLR.secondary,label:'Mutation'},
-    depart:{icon:'ri-logout-box-line',color:CLR.danger,label:'D\u00e9part'},
+    depart:{icon:'ri-logout-box-line',color:CLR.danger,label:'Départ'},
     embauche:{icon:'ri-user-add-line',color:CLR.success,label:'Embauche'},
     modification:{icon:'ri-edit-line',color:CLR.warning,label:'Modification'},
     import:{icon:'ri-upload-2-line',color:CLR.info,label:'Import'},
@@ -69,7 +69,7 @@ const EmployeDetailPage = () => {
             try {
                 const r = await api.get(`employes/${slug}?detailed=true`);
                 setEmployer(r.data.data); setStats(r.data.stats||null); setLogs(r.data.logs||[]); setHistory(r.data.history||[]);
-            } catch(err) { setAlert({type:'danger',message:err.response?.data?.message||'Employ\u00e9 introuvable.'}); }
+            } catch(err) { setAlert({type:'danger',message:err.response?.data?.message||'Employé introuvable.'}); }
             finally { setLoading(false); }
         }; f();
     }, [slug]);
@@ -89,11 +89,11 @@ const EmployeDetailPage = () => {
     if(!employer) return (
         <Layout>
             <AlertMessages alert={alert} setAlert={setAlert}/>
-            <div style={{textAlign:'center',padding:'60px 20px'}}><i className="ri-user-unfollow-line" style={{fontSize:56,color:'#e9ebec'}}></i><h5 style={{color:'#878a99',marginTop:16}}>Employ\u00e9 introuvable</h5><Link to="/employes" style={{background:CLR.primary,color:'#fff',border:'none',borderRadius:10,padding:'9px 18px',fontWeight:600,fontSize:13,textDecoration:'none',display:'inline-block',marginTop:8}}>Retour</Link></div>
+            <div style={{textAlign:'center',padding:'60px 20px'}}><i className="ri-user-unfollow-line" style={{fontSize:56,color:'#e9ebec'}}></i><h5 style={{color:'#878a99',marginTop:16}}>Employé introuvable</h5><Link to="/employes" style={{background:CLR.primary,color:'#fff',border:'none',borderRadius:10,padding:'9px 18px',fontWeight:600,fontSize:13,textDecoration:'none',display:'inline-block',marginTop:8}}>Retour</Link></div>
         </Layout>
     );
 
-    const st = STATUS_CFG[employer.status]||STATUS_CFG['Activ\u00e9'];
+    const st = STATUS_CFG[employer.status]||STATUS_CFG['Activé'];
     const initials = `${(employer.prenom?.[0]||'')}${(employer.nom?.[0]||'')}`.toUpperCase();
     const fmtD = d => d ? moment(d).format('DD MMMM YYYY') : '-';
     const fmtDT = d => d ? moment(d).format('DD/MM/YYYY HH:mm') : '-';
@@ -126,7 +126,7 @@ const EmployeDetailPage = () => {
                             <div>
                                 <h2 style={{color:'#fff',margin:0,fontSize:24,fontWeight:700}}>{employer.prenom} {employer.nom}</h2>
                                 <p style={{color:'rgba(255,255,255,.75)',margin:'4px 0 0',fontSize:14}}>
-                                    {employer.poste_occupe||'Poste non d\u00e9fini'} &bull; {employer.matricule}
+                                    {employer.poste_occupe||'Poste non défini'} &bull; {employer.matricule}
                                 </p>
                             </div>
                         </div>
@@ -188,11 +188,11 @@ const EmployeDetailPage = () => {
                                 <h6 style={{fontSize:12,fontWeight:700,textTransform:'uppercase',color:'#878a99',marginBottom:16}}>Service & Dates</h6>
                                 <InfoItem icon="ri-building-line" label="Service" value={employer.service?.name} badge badgeColor={CLR.info}/>
                                 <InfoItem icon="ri-calendar-check-line" label="Date d'embauche" value={fmtD(employer.date_embauche)}/>
-                                {employer.date_embauche && <InfoItem icon="ri-timer-line" label="Anciennet\u00e9" value={moment(employer.date_embauche).fromNow(true)} badge badgeColor={CLR.primary}/>}
-                                {employer.date_depart && <InfoItem icon="ri-door-open-line" label="Date de d\u00e9part" value={fmtD(employer.date_depart)}/>}
-                                {employer.type_depart && <InfoItem icon="ri-information-line" label="Type de d\u00e9part" value={employer.type_depart} badge badgeColor={CLR.danger}/>}
-                                <InfoItem icon="ri-time-line" label="Cr\u00e9\u00e9 le" value={fmtDT(employer.created_at)}/>
-                                {employer.creator && <InfoItem icon="ri-user-star-line" label="Cr\u00e9\u00e9 par" value={employer.creator.username}/>}
+                                {employer.date_embauche && <InfoItem icon="ri-timer-line" label="Ancienneté" value={moment(employer.date_embauche).fromNow(true)} badge badgeColor={CLR.primary}/>}
+                                {employer.date_depart && <InfoItem icon="ri-door-open-line" label="Date de départ" value={fmtD(employer.date_depart)}/>}
+                                {employer.type_depart && <InfoItem icon="ri-information-line" label="Type de départ" value={employer.type_depart} badge badgeColor={CLR.danger}/>}
+                                <InfoItem icon="ri-time-line" label="Créé le" value={fmtDT(employer.created_at)}/>
+                                {employer.creator && <InfoItem icon="ri-user-star-line" label="Créé par" value={employer.creator.username}/>}
                             </div>
                         </div>
                     )}
@@ -204,7 +204,7 @@ const EmployeDetailPage = () => {
                                 <h6 style={{fontSize:12,fontWeight:700,textTransform:'uppercase',color:'#878a99',margin:0}}>Journal des modifications <span style={{background:`${CLR.secondary}12`,color:CLR.secondary,borderRadius:8,padding:'2px 10px',fontSize:12,fontWeight:700,marginLeft:8}}>{logs.length}</span></h6>
                             </div>
                             {logs.length===0 ? (
-                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-file-list-3-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucune modification enregistr\u00e9e.</p></div>
+                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-file-list-3-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucune modification enregistrée.</p></div>
                             ) : logs.map((log,i)=>(
                                 <div key={log.id||i} style={{display:'flex',gap:12,padding:'12px 0',borderBottom:'1px solid #f3f3f9'}}>
                                     <div style={{width:36,height:36,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',background:`${CLR.info}12`,color:CLR.info,fontSize:16,flexShrink:0}}>
@@ -239,7 +239,7 @@ const EmployeDetailPage = () => {
                                 </div>
                             </div>
                             {filteredHistory.length===0 ? (
-                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-history-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucun \u00e9v\u00e9nement trouv\u00e9.</p></div>
+                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-history-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucun événement trouvé.</p></div>
                             ) : (
                                 <div className="table-responsive">
                                     <table style={{width:'100%',borderCollapse:'separate',borderSpacing:0}}>
@@ -248,8 +248,8 @@ const EmployeDetailPage = () => {
                                             <th style={thS}>Description</th>
                                             <th style={thS}>Sous-type</th>
                                             <th style={thS}>Montant</th>
-                                            <th style={thS}>Quantit\u00e9</th>
-                                            <th style={thS}>P\u00e9riode</th>
+                                            <th style={thS}>Quantité</th>
+                                            <th style={thS}>Période</th>
                                             <th style={thS}>Date</th>
                                         </tr></thead>
                                         <tbody>
@@ -285,7 +285,7 @@ const EmployeDetailPage = () => {
                         <div>
                             <h6 style={{fontSize:12,fontWeight:700,textTransform:'uppercase',color:'#878a99',marginBottom:20}}>Statistiques par type</h6>
                             {Object.keys(statsGrouped).length===0 ? (
-                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-bar-chart-2-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucune donn\u00e9e.</p></div>
+                                <div style={{textAlign:'center',padding:'40px 20px'}}><i className="ri-bar-chart-2-line" style={{fontSize:48,color:'#e9ebec'}}></i><p style={{color:'#878a99',marginTop:12}}>Aucune donnée.</p></div>
                             ) : (
                                 <div className="row g-3">
                                     {Object.entries(statsGrouped).map(([type,data])=>{
@@ -302,7 +302,7 @@ const EmployeDetailPage = () => {
                                                     <div style={{display:'flex',justifyContent:'space-around',textAlign:'center'}}>
                                                         <div><div style={{fontSize:20,fontWeight:700,color:c.color}}>{data.count}</div><div style={{fontSize:10,color:'#878a99',textTransform:'uppercase'}}>Total</div></div>
                                                         <div><div style={{fontSize:20,fontWeight:700,color:'#495057'}}>{data.montant?fmtN(data.montant):'-'}</div><div style={{fontSize:10,color:'#878a99',textTransform:'uppercase'}}>Montant</div></div>
-                                                        <div><div style={{fontSize:20,fontWeight:700,color:'#495057'}}>{data.quantite||'-'}</div><div style={{fontSize:10,color:'#878a99',textTransform:'uppercase'}}>Quantit\u00e9</div></div>
+                                                        <div><div style={{fontSize:20,fontWeight:700,color:'#495057'}}>{data.quantite||'-'}</div><div style={{fontSize:10,color:'#878a99',textTransform:'uppercase'}}>Quantité</div></div>
                                                     </div>
                                                 </div>
                                             </div>

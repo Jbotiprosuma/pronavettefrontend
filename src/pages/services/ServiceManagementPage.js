@@ -73,10 +73,10 @@ const ServiceManagementPage = () => {
         try {
             if(currentService?.slug) {
                 await api.put(`/services/${currentService.slug}`, { ...formData, slug:currentService.slug });
-                setAlert({type:'success',message:'Service mis \u00e0 jour avec succ\u00e8s !'});
+                setAlert({type:'success',message:'Service mis à jour avec succès !'});
             } else {
                 await api.post('/services', formData);
-                setAlert({type:'success',message:'Service cr\u00e9\u00e9 avec succ\u00e8s !'});
+                setAlert({type:'success',message:'Service créé avec succès !'});
             }
             setMode('list'); setCurrentService(null); await fetchServices();
         } catch(err) {
@@ -85,9 +85,9 @@ const ServiceManagementPage = () => {
     };
 
     const handleDelete = slug => {
-        Swal.fire({ title:'Supprimer ce service ?', text:'Cette action est irr\u00e9versible.', icon:'warning', showCancelButton:true, confirmButtonColor:CLR.danger, cancelButtonColor:CLR.primary, confirmButtonText:'Supprimer', cancelButtonText:'Annuler' }).then(async r => {
+        Swal.fire({ title:'Supprimer ce service ?', text:'Cette action est irréversible.', icon:'warning', showCancelButton:true, confirmButtonColor:CLR.danger, cancelButtonColor:CLR.primary, confirmButtonText:'Supprimer', cancelButtonText:'Annuler' }).then(async r => {
             if(!r.isConfirmed) return;
-            try { await api.delete(`/services/${slug}`); setAlert({type:'success',message:'Service supprim\u00e9.'}); Swal.fire('Supprim\u00e9','Le service a \u00e9t\u00e9 supprim\u00e9.','success'); await fetchServices(); }
+            try { await api.delete(`/services/${slug}`); setAlert({type:'success',message:'Service supprimé.'}); Swal.fire('Supprimé','Le service a été supprimé.','success'); await fetchServices(); }
             catch(err) { setAlert({type:'danger',message:err.response?.data?.message||'Impossible de supprimer.'}); Swal.fire('Erreur','Impossible de supprimer.','error'); }
         });
     };
@@ -113,7 +113,7 @@ const ServiceManagementPage = () => {
                             {mode==='list'?'Gestion des services':mode==='create'?'Nouveau service':'Modifier le service'}
                         </h2>
                         <p style={{color:'rgba(255,255,255,.75)',margin:'6px 0 0',fontSize:14}}>
-                            {mode==='list'?`${services.length} service${services.length>1?'s':''} enregistr\u00e9${services.length>1?'s':''}`:'Remplissez le formulaire ci-dessous'}
+                            {mode==='list'?`${services.length} service${services.length>1?'s':''} enregistré${services.length>1?'s':''}`:'Remplissez le formulaire ci-dessous'}
                         </p>
                     </div>
                     {mode==='list'&&canManage && (
@@ -181,7 +181,7 @@ const ServiceManagementPage = () => {
                                     <th style={{...thS,width:60,textAlign:'center'}}>#</th>
                                     <th style={thS}>Nom</th>
                                     <th style={thS}>Description</th>
-                                    <th style={thS}>Date de cr\u00e9ation</th>
+                                    <th style={thS}>Date de création</th>
                                     {canManage && <th style={{...thS,textAlign:'center',width:100}}>Actions</th>}
                                 </tr></thead>
                                 <tbody>
@@ -241,7 +241,7 @@ const ServiceManagementPage = () => {
                 <div style={{background:'#fff',borderRadius:14,overflow:'hidden',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
                     <div style={{padding:'16px 22px',borderBottom:'1px solid #f3f3f9',fontWeight:700,fontSize:15,color:'#495057'}}>
                         <i className={mode==='create'?'ri-add-circle-line':'ri-pencil-line'} style={{marginRight:8}}></i>
-                        {mode==='create'?'Cr\u00e9er un nouveau service':'Modifier le service'}
+                        {mode==='create'?'Créer un nouveau service':'Modifier le service'}
                     </div>
                     <div style={{padding:22}}>
                         <form onSubmit={handleSave}>
@@ -261,7 +261,7 @@ const ServiceManagementPage = () => {
                                 </button>
                                 <button type="submit" disabled={saving} style={{background:CLR.primary,color:'#fff',border:'none',borderRadius:10,padding:'10px 20px',fontWeight:600,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6,opacity:saving?.7:1}}>
                                     {saving?<span className="spinner-border spinner-border-sm"></span>:<i className={mode==='create'?'ri-add-line':'ri-save-line'}></i>}
-                                    {mode==='create'?'Cr\u00e9er':'Mettre \u00e0 jour'}
+                                    {mode==='create'?'Créer':'Mettre à jour'}
                                 </button>
                             </div>
                         </form>

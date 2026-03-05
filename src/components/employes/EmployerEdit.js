@@ -33,7 +33,7 @@ const EmployerEdit = ({ user }) => {
                     date_depart:d.date_depart?new Date(d.date_depart).toISOString().split('T')[0]:'',
                     type_depart:d.type_depart||'', last_update_by:user.id,
                 });
-            } catch { Swal.fire('Erreur',"Impossible de charger les donn\u00e9es.",'error'); navigate('/employes'); }
+            } catch { Swal.fire('Erreur',"Impossible de charger les données.",'error'); navigate('/employes'); }
             finally { setLoading(false); }
         }; f();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +49,7 @@ const EmployerEdit = ({ user }) => {
         setSaving(true);
         try {
             await api.put(`/employes/${slug}`, formData);
-            Swal.fire('Succ\u00e8s !','Les informations ont \u00e9t\u00e9 mises \u00e0 jour.','success');
+            Swal.fire('Succès !','Les informations ont été mises à jour.','success');
             navigate('/employes');
         } catch(err) { Swal.fire('Erreur',err.response?.data?.message||'Erreur.','error'); }
         finally { setSaving(false); }
@@ -75,7 +75,7 @@ const EmployerEdit = ({ user }) => {
                     <div style={{display:'flex',alignItems:'center',gap:16}}>
                         <div style={{width:56,height:56,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:22,fontWeight:700}}>{initials}</div>
                         <div>
-                            <h2 style={{color:'#fff',margin:0,fontSize:24,fontWeight:700}}>Modifier l'employ\u00e9</h2>
+                            <h2 style={{color:'#fff',margin:0,fontSize:24,fontWeight:700}}>Modifier l'employé</h2>
                             <p style={{color:'rgba(255,255,255,.75)',margin:'4px 0 0',fontSize:14}}>{empName} &bull; {formData.matricule}</p>
                         </div>
                     </div>
@@ -85,11 +85,11 @@ const EmployerEdit = ({ user }) => {
             {/* FORM */}
             <form onSubmit={handleSubmit}>
                 <div className="row g-4">
-                    {/* Identit\u00e9 */}
+                    {/* Identité */}
                     <div className="col-lg-6">
                         <div style={{background:'#fff',borderRadius:14,boxShadow:'0 2px 12px rgba(0,0,0,.06)',overflow:'hidden'}}>
                             <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f3f9',fontWeight:700,fontSize:14,color:'#495057'}}>
-                                <i className="ri-user-line" style={{marginRight:8,color:CLR.primary}}></i>Identit\u00e9
+                                <i className="ri-user-line" style={{marginRight:8,color:CLR.primary}}></i>Identité
                             </div>
                             <div style={{padding:20}}>
                                 <div className="row g-3">
@@ -98,7 +98,7 @@ const EmployerEdit = ({ user }) => {
                                         <input type="text" name="nom" value={formData.nom} onChange={handleChange} required style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-md-6">
-                                        <label style={labelS}>Pr\u00e9nom <span style={{color:CLR.danger}}>*</span></label>
+                                        <label style={labelS}>Prénom <span style={{color:CLR.danger}}>*</span></label>
                                         <input type="text" name="prenom" value={formData.prenom} onChange={handleChange} required style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-md-6">
@@ -138,12 +138,12 @@ const EmployerEdit = ({ user }) => {
                                     <div className="col-md-6">
                                         <label style={labelS}>Service</label>
                                         <select name="service_id" value={formData.service_id} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}>
-                                            <option value="">S\u00e9lectionner</option>
+                                            <option value="">Sélectionner</option>
                                             {services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="col-md-6">
-                                        <label style={labelS}>Poste occup\u00e9</label>
+                                        <label style={labelS}>Poste occupé</label>
                                         <input type="text" name="poste_occupe" value={formData.poste_occupe} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-md-4">
@@ -151,11 +151,11 @@ const EmployerEdit = ({ user }) => {
                                         <input type="date" name="date_embauche" value={formData.date_embauche} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-md-4">
-                                        <label style={labelS}>Date de d\u00e9part</label>
+                                        <label style={labelS}>Date de départ</label>
                                         <input type="date" name="date_depart" value={formData.date_depart} onChange={handleChange} style={inputS} onFocus={focus} onBlur={blur}/>
                                     </div>
                                     <div className="col-md-4">
-                                        <label style={labelS}>Type de d\u00e9part</label>
+                                        <label style={labelS}>Type de départ</label>
                                         <select name="type_depart" value={formData.type_depart} onChange={handleChange} style={inputS}>
                                             <option value="">--</option>
                                             <option value="DEMISSION">DEMISSION</option>
