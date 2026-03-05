@@ -59,7 +59,7 @@ const NavetteDetailPage = () => {
     const [currentEmployerPrimeNuit, setCurrentEmployerPrimeNuit] = useState(null);
     const [currentDepart, setCurrentDepart] = useState(null);
     const [abFormData, setAbFormData] = useState({ nb_jours: '', type_abs: '', motif: '', images: '' });
-    const [accompteFormData, setAccompteFormData] = useState({ somme: '', motif: '', images: '' });
+    const [accompteFormData, setAccompteFormData] = useState({ somme: '', motif: '', code_accompte: 'CL30' });
     const [heureFormData, setHeureFormData] = useState({ heures: '', pourcentage: '' });
     const [primeFormData, setPrimeFormData] = useState({ montant: '', type_prime: '' });
     const [primeNuitFormData, setPrimeNuitFormData] = useState({ code_prime_nuit: 'CL12', nb_jour: '' });
@@ -288,7 +288,7 @@ const NavetteDetailPage = () => {
             if (modalSetter === setIsDepartModalOpen) setDepartFormData(data);
         } else {
             setAbFormData({ nb_jours: '', type_abs: '', motif: '', images: [] });
-            setAccompteFormData({ somme: '', motif: '' });
+            setAccompteFormData({ somme: '', motif: '', code_accompte: 'CL30' });
             setHeureFormData({ heures: '', pourcentage: '' });
             setPrimeFormData({ montant: '', type_prime: '' });
             setPrimeNuitFormData({ code_prime_nuit: 'CL12', nb_jour: '' });
@@ -769,7 +769,7 @@ const NavetteDetailPage = () => {
                         onChange={(e) => setAbFormData({ ...abFormData, type_abs: e.target.value })}
                         required
                     >
-                        {['', 'ABSENCE_NON_REMUNEREE', 'ACCIDENT_DE_TRAVAIL', 'ABSENCE_MISE_À_PIEDS', 'ABSENCE_CONGES_DE_MATERNITE', 'ABSENCE_CONGES_PAYE', 'ABSENCE_REMUNEREE', 'ABSENCE_PATERNITE', 'ABSENCE_MALADIE', 'ABSENCE_FORMATION'].map(type => (
+                        {['', 'ABSENCE_NON_REMUNEREE', 'ACCIDENT_DE_TRAVAIL', 'ABSENCE_MISE_A_PIEDS', 'ABSENCE_CONGES_DE_MATERNITE', 'ABSENCE_CONGES_PAYE', 'ABSENCE_REMUNEREE', 'ABSENCE_PATERNITE', 'ABSENCE_MALADIE', 'ABSENCE_FORMATION', 'ABSENCE_CONGES_A_CALCULER', 'ABSENCE_CONGES_SUP_MATERNITE'].map(type => (
                             <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
                         ))}
                     </select>
@@ -953,6 +953,26 @@ const NavetteDetailPage = () => {
             <div className="modal-body-c">
             <form onSubmit={(e) => { e.preventDefault(); handleChildSubmit('acomptes', accompteFormData, !!currentEmployerAccompte, currentEmployerAccompte?.id); }}>
                 <div className="mb-3">
+                    <label className="form-label">Code Sage <span style={{ color: 'red' }} >*</span></label>
+                    <select className="form-select" value={accompteFormData.code_accompte || 'CL30'} onChange={(e) => setAccompteFormData({ ...accompteFormData, code_accompte: e.target.value })} required>
+                        <optgroup label="Acompte">
+                            <option value="CL30">CL30 - Acompte</option>
+                        </optgroup>
+                        <optgroup label="Retenues">
+                            <option value="CL31">CL31 - Retenue 1</option>
+                            <option value="CL32">CL32 - Retenue 2</option>
+                            <option value="CL33">CL33 - Retenue 3</option>
+                            <option value="CL34">CL34 - Retenue 4</option>
+                            <option value="CL35">CL35 - Retenue 5</option>
+                            <option value="CL36">CL36 - Retenue 6</option>
+                            <option value="CL37">CL37 - Retenue 7</option>
+                            <option value="CL38">CL38 - Retenue 8</option>
+                            <option value="CL39">CL39 - Retenue 9</option>
+                            <option value="CL40">CL40 - Retenue 10</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div className="mb-3">
                     <label className="form-label">Somme <span style={{ color: 'red' }} >*</span></label>
                     <input type="number" step="0.01" className="form-control" value={accompteFormData.somme} onChange={(e) => setAccompteFormData({ ...accompteFormData, somme: e.target.value })} required />
                 </div>
@@ -973,9 +993,9 @@ const NavetteDetailPage = () => {
                     <ul className="list-group">
                         {currentNavetteLigne.acomptes.map(acc => (
                             <li key={acc.id} className="list-group-item d-flex justify-content-between align-items-center">
-                                {acc.somme} F CFA - {acc.motif || 'Aucun motif'}
+                                <span><code>{acc.code_accompte || 'CL30'}</code> — {acc.somme} F CFA - {acc.motif || 'Aucun motif'}</span>
                                 <div>
-                                    <button className="btn btn-sm btn-info me-2" onClick={() => { setCurrentEmployerAccompte(acc); setAccompteFormData(acc); }}>Éditer</button>
+                                    <button className="btn btn-sm btn-info me-2" onClick={() => { setCurrentEmployerAccompte(acc); setAccompteFormData({ somme: acc.somme, motif: acc.motif, code_accompte: acc.code_accompte || 'CL30' }); }}>Éditer</button>
                                     <button className="btn btn-sm btn-danger" onClick={() => handleDeleteChild('acomptes', acc.id)}>Supprimer</button>
                                 </div>
                             </li>
@@ -1059,9 +1079,22 @@ const NavetteDetailPage = () => {
                         onChange={(e) => setPrimeFormData({ ...primeFormData, type_prime: e.target.value })}
                         required
                     >
-                        {['', 'PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE'].map(type => (
-                            <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
-                        ))}
+                        <option value=""></option>
+                        <optgroup label="Primes courantes">
+                            {['PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE', 'PRIME DE PANIER', 'PRIME DE TRANSPORT', 'PRIME DE FIN D ANNEE', 'PRIME FIXE IMPOSABLE', 'PRIME FIXE NON IMPOSABLE', 'PRIME DIVERS'].map(type => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Primes supplémentaires">
+                            {['PRIME SURSALAIRE', 'PRIME RAPPEL AUGMENTATION', 'PRIME SEMESTRIELLE', 'PRIME DE DEPART', 'PRIME FRAIS FUNERAIRES', 'PRIME ASTREINTE PROXIMITE', 'PRIME CAISSE PROXIMITE', 'PRIME JOUR SUPPLEMENTAIRE', 'PRIME VACCINATION'].map(type => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Indemnités">
+                            {['INDEMNITE PREAVIS', 'INDEMNITE AGGRAVATION', 'INDEMNITE LICENCIEMENT IMPOSABLE', 'INDEMNITE DECES IMPOSABLE', 'INDEMNITE RETRAITE IMPOSABLE', 'INDEMNITE DEPART CDD IMPOSABLE', 'INDEMNITE LICENCIEMENT NON IMPOSABLE', 'INDEMNITE DECES NON IMPOSABLE', 'INDEMNITE RETRAITE NON IMPOSABLE', 'INDEMNITE FIXE DEPART NON IMPOSABLE', 'INDEMNITE DEPART CDD NON IMPOSABLE'].map(type => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
+                        </optgroup>
                     </select>
                 </div>
                 <b>NB: <span style={{ color: 'red' }} >*</span> obligatoire</b>
