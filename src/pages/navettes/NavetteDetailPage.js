@@ -62,7 +62,7 @@ const NavetteDetailPage = () => {
     const [accompteFormData, setAccompteFormData] = useState({ somme: '', motif: '', images: '' });
     const [heureFormData, setHeureFormData] = useState({ heures: '', pourcentage: '' });
     const [primeFormData, setPrimeFormData] = useState({ montant: '', type_prime: '' });
-    const [primeNuitFormData, setPrimeNuitFormData] = useState({ nb_jour: '' });
+    const [primeNuitFormData, setPrimeNuitFormData] = useState({ code_prime_nuit: 'CL12', nb_jour: '' });
     const [departFormData, setDepartFormData] = useState({ date_depart: '', type_depart: '' });
     const [isMutationModalOpen, setIsMutationModalOpen] = useState(false);
     const [mutationFormData, setMutationFormData] = useState({
@@ -291,7 +291,7 @@ const NavetteDetailPage = () => {
             setAccompteFormData({ somme: '', motif: '' });
             setHeureFormData({ heures: '', pourcentage: '' });
             setPrimeFormData({ montant: '', type_prime: '' });
-            setPrimeNuitFormData({ nb_jour: '' });
+            setPrimeNuitFormData({ code_prime_nuit: 'CL12', nb_jour: '' });
             setDepartFormData({ date_depart: '', type_depart: '' });
         }
         modalSetter(true);
@@ -1100,6 +1100,14 @@ const NavetteDetailPage = () => {
             <div className="modal-body-c">
             <form onSubmit={(e) => { e.preventDefault(); handleChildSubmit('primes-nuit', primeNuitFormData, !!currentEmployerPrimeNuit, currentEmployerPrimeNuit?.id); }}>
                 <div className="mb-3">
+                    <label className="form-label">Code prime <span style={{ color: 'red' }} >*</span></label>
+                    <select className="form-select" value={primeNuitFormData.code_prime_nuit} onChange={(e) => setPrimeNuitFormData({ ...primeNuitFormData, code_prime_nuit: e.target.value })} required>
+                        <option value="CL12">CL12 — Prime de nuit</option>
+                        <option value="CL06">CL06 — Prime panier</option>
+                        <option value="CL22">CL22 — Complément nuit</option>
+                    </select>
+                </div>
+                <div className="mb-3">
                     <label className="form-label">Nombre de jours <span style={{ color: 'red' }} >*</span></label>
                     <input type="number" step="1" min="0" className="form-control" value={primeNuitFormData.nb_jour} onChange={(e) => setPrimeNuitFormData({ ...primeNuitFormData, nb_jour: parseInt(e.target.value, 10) || 0 })} required />
                 </div>
@@ -1115,9 +1123,9 @@ const NavetteDetailPage = () => {
                     <ul className="list-group">
                         {currentNavetteLigne.primesNuit.map(pn => (
                             <li key={pn.id} className="list-group-item d-flex justify-content-between align-items-center">
-                                {pn.nb_jour} jour{pn.nb_jour > 1 ? 's' : ''}
+                                <span><code>{pn.code_prime_nuit}</code> — {pn.nb_jour} jour{pn.nb_jour > 1 ? 's' : ''}</span>
                                 <div>
-                                    <button className="btn btn-sm btn-info me-2" onClick={() => { setCurrentEmployerPrimeNuit(pn); setPrimeNuitFormData({ nb_jour: pn.nb_jour }); }}>Éditer</button>
+                                    <button className="btn btn-sm btn-info me-2" onClick={() => { setCurrentEmployerPrimeNuit(pn); setPrimeNuitFormData({ code_prime_nuit: pn.code_prime_nuit || 'CL12', nb_jour: pn.nb_jour }); }}>Éditer</button>
                                     <button className="btn btn-sm btn-danger" onClick={() => handleDeleteChild('primes-nuit', pn.id)}>Supprimer</button>
                                 </div>
                             </li>
