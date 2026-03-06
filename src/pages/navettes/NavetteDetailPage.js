@@ -32,6 +32,18 @@ const customModalStyles = {
     },
 };
 
+// Styles pour les modals de formulaire (absences, acomptes, etc.) qui s'affichent AU-DESSUS du modal d'actions
+const subModalStyles = {
+    content: {
+        ...customModalStyles.content,
+    },
+    overlay: {
+        backgroundColor: 'rgba(15,23,42,.45)',
+        backdropFilter: 'blur(2px)',
+        zIndex: 1060,
+    },
+};
+
 const ETAT_STEPS = [
     { key: "En attente de l'enregistrement des informations des employés", label: 'Saisie', icon: 'ri-edit-2-line' },
     { key: "En attente de l'envoi des informations des employés au manager", label: 'Envoi', icon: 'ri-send-plane-line' },
@@ -149,6 +161,9 @@ const NavetteDetailPage = () => {
                 .sort((a, b) => a.employer.nom.localeCompare(b.employer.nom));
 
             setNavetteLines(sortedNavetteLines);
+
+            // Rafraîchir la ligne dans le modal d'actions s'il est ouvert
+            refreshActionModalLine(sortedNavetteLines);
 
         } catch (error) {
             console.error('Erreur lors de la récupération des informations :', error);
@@ -299,7 +314,10 @@ const NavetteDetailPage = () => {
 
     const closeModal = (modalSetter) => {
         modalSetter(false);
-        setCurrentNavetteLigne(null);
+        // Ne PAS réinitialiser currentNavetteLigne si le modal d'actions est toujours ouvert
+        if (!isActionModalOpen) {
+            setCurrentNavetteLigne(null);
+        }
         setCurrentEmployerAb(null);
         setCurrentEmployerAccompte(null);
         setCurrentEmployerHeure(null);
@@ -307,6 +325,22 @@ const NavetteDetailPage = () => {
         setCurrentEmployerPrimeNuit(null);
         setCurrentDepart(null);
         setNewImages([]);
+    };
+
+    const closeActionModal = () => {
+        setIsActionModalOpen(false);
+        setActionModalLine(null);
+        setCurrentNavetteLigne(null);
+    };
+
+    const refreshActionModalLine = (newNavetteLines) => {
+        if (isActionModalOpen && actionModalLine) {
+            const updatedLine = newNavetteLines.find(l => l.id === actionModalLine.id);
+            if (updatedLine) {
+                setActionModalLine(updatedLine);
+                setCurrentNavetteLigne(updatedLine);
+            }
+        }
     };
 
     const handleChildSubmitImages = async (entityType, formData, isEdit, id = null, newFiles = [], filesToDelete = []) => {
@@ -490,27 +524,166 @@ const NavetteDetailPage = () => {
         });
     };
 
-    const handleSignaleProbleme = async () => {
-        Swal.fire({
-            title: 'Signaler un problème ?',
-            text: "Redonner la main au manager pour résoudre un souci ?",
+    // ── SIGNALEMENT PROFESSIONNEL ──
+    const [isSignalementModalOpen, setIsSignalementModalOpen] = useState(false);
+    const [signalementSelections, setSignalementSelections] = useState({}); // { [navette_ligne_id]: { checked: bool, comment: string } }
+
+    const openSignalementModal = () => {
+        const selections = {};
+        navetteLines.forEach(line => {
+            selections[line.id] = {
+                checked: !!line.correction_flag,
+                comment: line.correction_comment || ''
+            };
+        });
+        setSignalementSelections(selections);
+        setIsSignalementModalOpen(true);
+    };
+
+    const handleSignalementToggle = (lineId) => {
+        setSignalementSelections(prev => ({
+            ...prev,
+            [lineId]: { ...prev[lineId], checked: !prev[lineId]?.checked }
+        }));
+    };
+
+    const handleSignalementComment = (lineId, comment) => {
+        setSignalementSelections(prev => ({
+            ...prev,
+            [lineId]: { ...prev[lineId], comment }
+        }));
+    };
+
+    const handleSignalementSubmit = async () => {
+        const lignesSignalees = Object.entries(signalementSelections)
+            .filter(([, v]) => v.checked)
+            .map(([id, v]) => ({ navette_ligne_id: parseInt(id), comment: v.comment || '' }));
+
+        if (lignesSignalees.length === 0) {
+            Swal.fire('Attention', 'Veuillez sélectionner au moins une ligne à signaler.', 'warning');
+            return;
+        }
+
+        const hasEmptyComments = lignesSignalees.some(l => !l.comment || !l.comment.trim());
+        if (hasEmptyComments) {
+            Swal.fire('Attention', 'Veuillez ajouter un commentaire pour chaque ligne signalée.', 'warning');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: `Signaler ${lignesSignalees.length} ligne${lignesSignalees.length > 1 ? 's' : ''} ?`,
+            text: "L'état navette sera renvoyé au manager pour correction.",
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Oui, redonner !',
-            cancelButtonText: 'Annuler'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    await api.put(`navettes/${navette.id}/signaler`);
-                    Swal.fire('Succès', 'Autorisation accordée avec succès !', 'success');
-                    await fetchNavetteData();
-                } catch (error) {
-                    Swal.fire('Erreur', error.response?.data?.message || 'Impossible de signaler le problème.', 'error');
-                }
-            }
+            confirmButtonText: 'Confirmer le signalement',
+            cancelButtonText: 'Annuler',
         });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await api.put(`navettes/${navette.id}/signaler`, { lignes: lignesSignalees });
+            Swal.fire('Succès', 'Signalement envoyé avec succès !', 'success');
+            setIsSignalementModalOpen(false);
+            await fetchNavetteData();
+        } catch (error) {
+            Swal.fire('Erreur', error.response?.data?.message || 'Impossible de signaler le problème.', 'error');
+        }
+    };
+
+    const renderSignalementModal = () => {
+        const selectedCount = Object.values(signalementSelections).filter(v => v.checked).length;
+
+        return (
+            <Modal isOpen={isSignalementModalOpen} onRequestClose={() => setIsSignalementModalOpen(false)}
+                style={{ ...subModalStyles, content: { ...subModalStyles.content, maxWidth: '780px' } }}
+                contentLabel="Signaler des corrections">
+                <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #f06548, #d9534f)' }}>
+                    <div className="d-flex align-items-center gap-3">
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className="ri-error-warning-line" style={{ fontSize: '1.2rem', color: '#fff' }}></i>
+                        </div>
+                        <div>
+                            <h5 className="mb-0 text-white" style={{ fontSize: '1.05rem', fontWeight: 700 }}>Signaler des corrections</h5>
+                            <span style={{ color: 'rgba(255,255,255,.7)', fontSize: '.75rem' }}>Sélectionnez les lignes à corriger et ajoutez vos commentaires</span>
+                        </div>
+                    </div>
+                    <button onClick={() => setIsSignalementModalOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
+                </div>
+                <div className="modal-body-c" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                    {/* Summary bar */}
+                    <div className="d-flex align-items-center justify-content-between mb-3 p-2" style={{ background: '#f8f9fa', borderRadius: 10 }}>
+                        <span style={{ fontSize: '.82rem', color: '#495057', fontWeight: 600 }}>
+                            <i className="ri-checkbox-multiple-line me-1 text-primary"></i>
+                            {selectedCount} ligne{selectedCount > 1 ? 's' : ''} sélectionnée{selectedCount > 1 ? 's' : ''}
+                        </span>
+                        <span style={{ fontSize: '.75rem', color: '#878a99' }}>{navetteLines.length} employés au total</span>
+                    </div>
+
+                    {/* Lines list */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {navetteLines.map(line => {
+                            const sel = signalementSelections[line.id] || { checked: false, comment: '' };
+                            const emp = line.employer;
+                            return (
+                                <div key={line.id} style={{
+                                    border: sel.checked ? '2px solid #f06548' : '1.5px solid #e9ecef',
+                                    borderRadius: 12, padding: '12px 16px',
+                                    background: sel.checked ? '#fef2f0' : '#fff',
+                                    transition: 'all .2s',
+                                }}>
+                                    <div className="d-flex align-items-center gap-3">
+                                        <input type="checkbox" className="form-check-input"
+                                            checked={sel.checked}
+                                            onChange={() => handleSignalementToggle(line.id)}
+                                            style={{ width: 20, height: 20, cursor: 'pointer' }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div className="d-flex align-items-center gap-2">
+                                                <span className="fw-semibold" style={{ fontSize: '.85rem' }}>{emp.nom} {emp.prenom}</span>
+                                                <code style={{ fontSize: '.72rem', background: '#f0f2f5', padding: '1px 6px', borderRadius: 4 }}>{emp.matricule}</code>
+                                                <span className={`badge rounded-pill ${line.status === 'Cadre' ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`} style={{ fontSize: '.62rem' }}>{line.status}</span>
+                                            </div>
+                                            <div className="d-flex gap-3 mt-1" style={{ fontSize: '.72rem', color: '#878a99' }}>
+                                                <span>Jours: {line.nb_jours}</span>
+                                                <span>Abs: {line.nb_jour_abs || 0}</span>
+                                                <span>Acompte: {line.accompte ? `${line.accompte.toLocaleString()} F` : '—'}</span>
+                                                <span>P.Nuit: {line.prime_nuit || '—'}</span>
+                                            </div>
+                                        </div>
+                                        {sel.checked && <i className="ri-error-warning-fill text-danger" style={{ fontSize: '1.1rem' }}></i>}
+                                    </div>
+                                    {sel.checked && (
+                                        <div className="mt-2" style={{ marginLeft: 36 }}>
+                                            <textarea
+                                                className="form-control"
+                                                placeholder="Décrivez le problème constaté sur cette ligne..."
+                                                value={sel.comment}
+                                                onChange={(e) => handleSignalementComment(line.id, e.target.value)}
+                                                rows={2}
+                                                style={{ fontSize: '.82rem', borderColor: '#f06548', borderRadius: 8, resize: 'vertical' }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                {/* Footer */}
+                <div style={{ padding: '14px 24px', borderTop: '1px solid #e9ecef', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '.78rem', color: '#878a99' }}>
+                        {selectedCount > 0 ? <><i className="ri-error-warning-line text-danger me-1"></i>{selectedCount} correction{selectedCount > 1 ? 's' : ''} à envoyer</> : 'Aucune ligne sélectionnée'}
+                    </span>
+                    <div className="d-flex gap-2">
+                        <button className="btn btn-light btn-sm" style={{ borderRadius: 8 }} onClick={() => setIsSignalementModalOpen(false)}>Annuler</button>
+                        <button className="btn btn-danger btn-sm" style={{ borderRadius: 8 }} disabled={selectedCount === 0} onClick={handleSignalementSubmit}>
+                            <i className="ri-send-plane-fill me-1"></i>Envoyer le signalement
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        );
     };
 
     const handleCloseNavette = async () => {
@@ -643,7 +816,7 @@ const NavetteDetailPage = () => {
             await api.post('/mutations', dataToSend);
             Swal.fire('Succès', 'Mutation créée avec succès!', 'success');
             setIsMutationModalOpen(false);
-            setCurrentNavetteLigne(null);
+            if (!isActionModalOpen) setCurrentNavetteLigne(null);
             await fetchNavetteData();
         } catch (error) {
             console.error('Erreur mutation:', error);
@@ -652,10 +825,10 @@ const NavetteDetailPage = () => {
     };
 
     const renderMutationModal = () => (
-        <Modal isOpen={isMutationModalOpen} onRequestClose={() => { setIsMutationModalOpen(false); setCurrentNavetteLigne(null); }} style={customModalStyles} contentLabel="Créer une Mutation">
+        <Modal isOpen={isMutationModalOpen} onRequestClose={() => { setIsMutationModalOpen(false); if (!isActionModalOpen) setCurrentNavetteLigne(null); }} style={subModalStyles} contentLabel="Créer une Mutation">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #405189, #2e3a5f)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-shuffle-line"></i> Muter {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
-                <button onClick={() => { setIsMutationModalOpen(false); setCurrentNavetteLigne(null); }} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => { setIsMutationModalOpen(false); if (!isActionModalOpen) setCurrentNavetteLigne(null); }} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
             </div>
             <div className="modal-body-c">
             <div className="alert alert-info p-2 d-flex justify-content-between align-items-center mb-3">
@@ -736,7 +909,7 @@ const NavetteDetailPage = () => {
                 <hr />
                 <div className="d-flex justify-content-end gap-2">
                     <button type="submit" className="btn btn-primary">Créer la mutation</button>
-                    <button type="button" className="btn btn-light" style={{ borderRadius: 10 }} onClick={() => { setIsMutationModalOpen(false); setCurrentNavetteLigne(null); }}>Annuler</button>
+                    <button type="button" className="btn btn-light" style={{ borderRadius: 10 }} onClick={() => { setIsMutationModalOpen(false); if (!isActionModalOpen) setCurrentNavetteLigne(null); }}>Annuler</button>
                 </div>
             </form>
             </div>
@@ -744,7 +917,7 @@ const NavetteDetailPage = () => {
     );
 
     const renderAbModal = () => (
-        <Modal isOpen={isAbModalOpen} onRequestClose={() => closeModal(setIsAbModalOpen)} style={customModalStyles} contentLabel="Gérer Absences">
+        <Modal isOpen={isAbModalOpen} onRequestClose={() => closeModal(setIsAbModalOpen)} style={subModalStyles} contentLabel="Gérer Absences">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #0ab39c, #099885)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-calendar-line"></i> {currentEmployerAb ? 'Modifier une absence de' : 'Ajouter des absences pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsAbModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -945,7 +1118,7 @@ const NavetteDetailPage = () => {
     );
 
     const renderAccompteModal = () => (
-        <Modal isOpen={isAccompteModalOpen} onRequestClose={() => closeModal(setIsAccompteModalOpen)} style={customModalStyles} contentLabel="Gérer Acomptes">
+        <Modal isOpen={isAccompteModalOpen} onRequestClose={() => closeModal(setIsAccompteModalOpen)} style={subModalStyles} contentLabel="Gérer Acomptes">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #f7b84b, #e5a63b)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-money-dollar-circle-line"></i> {currentEmployerAccompte ? 'Modifier un acompte de' : 'Ajouter un acompte pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsAccompteModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -1008,7 +1181,7 @@ const NavetteDetailPage = () => {
     );
 
     const renderHeureModal = () => (
-        <Modal isOpen={isHeureModalOpen} onRequestClose={() => closeModal(setIsHeureModalOpen)} style={customModalStyles} contentLabel="Gérer Heures Sup.">
+        <Modal isOpen={isHeureModalOpen} onRequestClose={() => closeModal(setIsHeureModalOpen)} style={subModalStyles} contentLabel="Gérer Heures Sup.">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #405189, #3577f1)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-time-line"></i> {currentEmployerHeure ? 'Modifier les heures sup. de' : 'Ajouter des heures sup. pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsHeureModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -1060,7 +1233,7 @@ const NavetteDetailPage = () => {
     );
 
     const renderPrimeModal = () => (
-        <Modal isOpen={isPrimeModalOpen} onRequestClose={() => closeModal(setIsPrimeModalOpen)} style={customModalStyles} contentLabel="Gérer Primes">
+        <Modal isOpen={isPrimeModalOpen} onRequestClose={() => closeModal(setIsPrimeModalOpen)} style={subModalStyles} contentLabel="Gérer Primes">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #0ab39c, #099885)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-award-line"></i> {currentEmployerPrime ? 'Modifier la prime de' : 'Ajouter une prime pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsPrimeModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -1125,7 +1298,7 @@ const NavetteDetailPage = () => {
     );
 
     const renderPrimeNuitModal = () => (
-        <Modal isOpen={isPrimeNuitModalOpen} onRequestClose={() => closeModal(setIsPrimeNuitModalOpen)} style={customModalStyles} contentLabel="Gérer Primes de Nuit">
+        <Modal isOpen={isPrimeNuitModalOpen} onRequestClose={() => closeModal(setIsPrimeNuitModalOpen)} style={subModalStyles} contentLabel="Gérer Primes de Nuit">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #2e3a5f, #1a1f36)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-moon-line"></i> {currentEmployerPrimeNuit ? 'Modifier une prime de nuit de' : 'Ajouter une prime de nuit pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsPrimeNuitModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -1174,7 +1347,7 @@ const NavetteDetailPage = () => {
         <Modal
             isOpen={isImageModalOpen}
             onRequestClose={closeImageModal}
-            style={customModalStyles}
+            style={subModalStyles}
             contentLabel="Voir les Fichiers"
         >
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #3577f1, #405189)' }}>
@@ -1231,7 +1404,7 @@ const NavetteDetailPage = () => {
         <Modal
             isOpen={isSingleImageModalOpen}
             onRequestClose={closeSingleImageModal}
-            style={customModalStyles}
+            style={subModalStyles}
             contentLabel="Image Agrandie"
         >
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #3577f1, #405189)' }}>
@@ -1263,12 +1436,9 @@ const NavetteDetailPage = () => {
     };
 
     const handleActionClick = (type, line) => {
-        setIsActionModalOpen(false);
+        // Le modal d'actions RESTE ouvert — le formulaire s'affiche par-dessus
         const lineData = JSON.stringify(line).replace(/"/g, '&quot;');
-        // Small delay so action modal animation closes first
-        setTimeout(() => {
-            window.handleOpenModal(type, lineData);
-        }, 150);
+        window.handleOpenModal(type, lineData);
     };
 
     const renderActionModal = () => {
@@ -1336,7 +1506,7 @@ const NavetteDetailPage = () => {
         return (
             <Modal
                 isOpen={isActionModalOpen}
-                onRequestClose={() => { setIsActionModalOpen(false); setActionModalLine(null); }}
+                onRequestClose={closeActionModal}
                 style={{
                     ...customModalStyles,
                     content: { ...customModalStyles.content, maxWidth: '560px' }
@@ -1357,7 +1527,7 @@ const NavetteDetailPage = () => {
                             </div>
                         </div>
                     </div>
-                    <button onClick={() => { setIsActionModalOpen(false); setActionModalLine(null); }} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
+                    <button onClick={closeActionModal} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
                 </div>
 
                 {/* Progress bar */}
@@ -1435,7 +1605,7 @@ const NavetteDetailPage = () => {
     };
 
     const renderDepartModal = () => (
-        <Modal isOpen={isDepartModalOpen} onRequestClose={() => closeModal(setIsDepartModalOpen)} style={customModalStyles} contentLabel="Gérer Départ">
+        <Modal isOpen={isDepartModalOpen} onRequestClose={() => closeModal(setIsDepartModalOpen)} style={subModalStyles} contentLabel="Gérer Départ">
             <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #f06548, #d9534f)' }}>
                 <h5 className="mb-0 text-white d-flex align-items-center gap-2"><i className="ri-door-open-line"></i> {currentDepart ? 'Modifier le départ de' : 'Ajouter un départ pour'} {currentNavetteLigne?.employer?.nom} {currentNavetteLigne?.employer?.prenom}</h5>
                 <button onClick={() => closeModal(setIsDepartModalOpen)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
@@ -1752,6 +1922,16 @@ const NavetteDetailPage = () => {
                                         <i className="ri-send-plane-fill me-1"></i>Confirmer & transmettre à la Paie
                                     </button>
                                 )}
+                                {navette.etat === "En attente du traitement de l'etat navette par la paie" && (
+                                    <>
+                                        <button type="button" className="btn btn-sm btn-danger" onClick={openSignalementModal}>
+                                            <i className="ri-error-warning-line me-1"></i>Signaler des corrections
+                                        </button>
+                                        <button type="button" className="btn btn-sm btn-success" onClick={handleCloseNavette}>
+                                            <i className="ri-checkbox-circle-line me-1"></i>Clôturer la navette
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1784,6 +1964,14 @@ const NavetteDetailPage = () => {
                             <span className="badge bg-primary-subtle text-primary rounded-pill px-3">{filteredLines.length} / {navetteLines.length}</span>
                         </div>
                         <div className="card-body p-0" style={{ overflowX: 'auto' }}>
+                            {navetteLines.some(l => l.correction_flag) && (
+                                <div className="alert alert-danger d-flex align-items-center m-3 mb-0 py-2 px-3" style={{ borderRadius: 10, background: 'linear-gradient(135deg, rgba(240,101,72,.08), rgba(240,101,72,.04))', border: '1px solid rgba(240,101,72,.25)' }}>
+                                    <i className="ri-error-warning-fill me-2 fs-5" style={{ color: '#f06548' }}></i>
+                                    <span style={{ fontSize: '.82rem', color: '#495057' }}>
+                                        <strong>{navetteLines.filter(l => l.correction_flag).length} ligne{navetteLines.filter(l => l.correction_flag).length > 1 ? 's' : ''}</strong> signalée{navetteLines.filter(l => l.correction_flag).length > 1 ? 's' : ''} par la paie — les lignes concernées sont surlignées en rouge avec le détail de la correction.
+                                    </span>
+                                </div>
+                            )}
                             {filteredLines.length > 0 ? (
                                 <table className="nav-tbl w-100" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
                                     <thead>
@@ -1817,7 +2005,7 @@ const NavetteDetailPage = () => {
 
                                             return (
                                                 <React.Fragment key={line.id}>
-                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s' }}>
+                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s', background: line.correction_flag ? 'rgba(240, 101, 72, 0.08)' : 'transparent' }}>
                                                         <td>
                                                             <button onClick={() => toggleRow(line.id)} className="btn btn-sm p-0 border-0" style={{ width: 24, height: 24, borderRadius: 6, background: isExpanded ? '#405189' : '#e9ecef', color: isExpanded ? '#fff' : '#878a99', fontSize: '.7rem', transition: 'all .2s' }}>
                                                                 <i className={isExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}></i>
@@ -1833,6 +2021,11 @@ const NavetteDetailPage = () => {
                                                             {isMutIn && hasPendingMut && <span className="badge bg-warning-subtle text-warning ms-2" style={{ fontSize: '.6rem' }}><i className="ri-time-line me-1"></i>En attente</span>}
                                                             {isMutIn && !hasPendingMut && <span className="badge bg-info-subtle text-info ms-2" style={{ fontSize: '.6rem' }}>Entrant</span>}
                                                             {!isMutOut && !isMutIn && hasPendingMut && <span className="badge bg-warning-subtle text-warning ms-2" style={{ fontSize: '.6rem' }}><i className="ri-time-line me-1"></i>Mutation</span>}
+                                                            {line.correction_flag && (
+                                                                <span className="badge bg-danger ms-2" style={{ fontSize: '.6rem', cursor: 'help' }} title={line.correction_comment || 'Correction demandée'}>
+                                                                    <i className="ri-error-warning-line me-1"></i>À corriger
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="text-center fw-semibold">{line.nb_jours}</td>
                                                         <td className="text-center">{line.nb_jour_abs || <span className="text-muted">—</span>}</td>
@@ -1886,6 +2079,15 @@ const NavetteDetailPage = () => {
                                                     {isExpanded && (
                                                         <tr className="expand-row">
                                                             <td colSpan={12} style={{ padding: '14px 16px 14px 48px' }}>
+                                                                {line.correction_flag && (
+                                                                    <div className="alert alert-danger d-flex align-items-start mb-3 py-2 px-3" style={{ fontSize: '.78rem', borderLeft: '4px solid #f06548' }}>
+                                                                        <i className="ri-error-warning-fill me-2 fs-5" style={{ color: '#f06548' }}></i>
+                                                                        <div>
+                                                                            <strong>Correction demandée par la paie :</strong>
+                                                                            <p className="mb-0 mt-1">{line.correction_comment || 'Aucun commentaire'}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                                 <div className="row g-3">
                                                                     {/* Absences */}
                                                                     <div className="col-lg-6">
@@ -1969,6 +2171,7 @@ const NavetteDetailPage = () => {
             </Layout>
 
             {renderActionModal()}
+            {renderSignalementModal()}
             {renderAbModal()}
             {renderAccompteModal()}
             {renderHeureModal()}

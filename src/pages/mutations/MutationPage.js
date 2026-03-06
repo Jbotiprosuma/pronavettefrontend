@@ -61,6 +61,7 @@ const MutationPage = () => {
     const [filterPeriode, setFilterPeriode] = useState('');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [currentPage, setCurrentPage] = useState(1);
+    const [campagneActive, setCampagneActive] = useState(false);
 
     /* -- Chargement -- */
     const fetchMutations = useCallback(async () => {
@@ -70,7 +71,13 @@ const MutationPage = () => {
     const fetchServices = useCallback(async () => {
         try { const r = await api.get('services'); setServices(r.data.data || []); } catch {}
     }, []);
-    useEffect(() => { Promise.all([fetchMutations(), fetchServices()]).finally(() => setLoadingData(false)); }, [fetchMutations, fetchServices]);
+    const fetchCampagneStatus = useCallback(async () => {
+        try {
+            const r = await api.get('campagnes/current-month');
+            setCampagneActive(r.data.hasActiveCampagne === true);
+        } catch {}
+    }, []);
+    useEffect(() => { Promise.all([fetchMutations(), fetchServices(), fetchCampagneStatus()]).finally(() => setLoadingData(false)); }, [fetchMutations, fetchServices, fetchCampagneStatus]);
 
     /* -- KPI -- */
     const kpi = useMemo(() => {
@@ -156,14 +163,29 @@ const MutationPage = () => {
                         <button onClick={handleExport} style={{background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',color:'#fff',borderRadius:10,padding:'9px 18px',cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6,backdropFilter:'blur(4px)'}}>
                             <i className="ri-file-excel-2-line"></i> Exporter
                         </button>
-                        <Link to="/mutation/create" style={{background:'#fff',color:'#405189',borderRadius:10,padding:'9px 18px',fontWeight:600,fontSize:13,textDecoration:'none',display:'flex',alignItems:'center',gap:6,border:'none'}}>
-                            <i className="ri-add-line"></i> Nouvelle mutation
-                        </Link>
+                        {!campagneActive && (
+                            <Link to="/mutation/create" style={{background:'#fff',color:'#405189',borderRadius:10,padding:'9px 18px',fontWeight:600,fontSize:13,textDecoration:'none',display:'flex',alignItems:'center',gap:6,border:'none'}}>
+                                <i className="ri-add-line"></i> Nouvelle mutation
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>
 
             <AlertMessages alert={alert} setAlert={setAlert} />
+
+            {/* Bannière campagne active */}
+            {campagneActive && (
+                <div style={{background:'linear-gradient(135deg,#f7b84b15,#f0654815)',border:'1.5px solid #f7b84b40',borderRadius:12,padding:'14px 20px',marginBottom:20,display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{width:40,height:40,borderRadius:10,background:'#f7b84b20',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                        <i className="ri-alarm-warning-line" style={{fontSize:'1.2rem',color:'#f7b84b'}}></i>
+                    </div>
+                    <div>
+                        <div style={{fontWeight:700,fontSize:14,color:'#495057'}}>Campagne en cours</div>
+                        <div style={{fontSize:12,color:'#878a99'}}>La création et la modification de mutations sont désactivées pendant la campagne. Les mutations se font uniquement via la gestion de l'état navette.</div>
+                    </div>
+                </div>
+            )}
 
             {/* KPI CARDS */}
             <div className="row g-3 mb-4">
@@ -326,7 +348,7 @@ const MutationPage = () => {
                                                 <div style={{display:'flex',justifyContent:'center',gap:4}}>
                                                     <ActionBtn color={CLR.info} icon="ri-eye-line" title="Détails" onClick={()=>navigate(`/mutation/detail/${m.id}`)}/>
                                                     {isPending && <>
-                                                        <ActionBtn color={CLR.primary} icon="ri-pencil-line" title="Modifier" onClick={()=>navigate(`/mutation/edit/${m.id}`)}/>
+                                                        {!campagneActive && <ActionBtn color={CLR.primary} icon="ri-pencil-line" title="Modifier" onClick={()=>navigate(`/mutation/edit/${m.id}`)}/>}
                                                         <ActionBtn color={CLR.success} icon="ri-check-double-line" title="Valider" onClick={()=>handleConfirm(m.id)}/>
                                                         <ActionBtn color={CLR.danger} icon="ri-close-circle-line" title="Rejeter" onClick={()=>handleReject(m.id)}/>
                                                         <ActionBtn color={CLR.secondary} icon="ri-forbid-line" title="Annuler" onClick={()=>handleCancel(m.id)}/>
