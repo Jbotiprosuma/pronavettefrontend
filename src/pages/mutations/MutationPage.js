@@ -349,8 +349,12 @@ const MutationPage = () => {
                                                     <ActionBtn color={CLR.info} icon="ri-eye-line" title="Détails" onClick={()=>navigate(`/mutation/detail/${m.id}`)}/>
                                                     {isPending && <>
                                                         {!campagneActive && <ActionBtn color={CLR.primary} icon="ri-pencil-line" title="Modifier" onClick={()=>navigate(`/mutation/edit/${m.id}`)}/>}
-                                                        <ActionBtn color={CLR.success} icon="ri-check-double-line" title="Valider" onClick={()=>handleConfirm(m.id)}/>
-                                                        <ActionBtn color={CLR.danger} icon="ri-close-circle-line" title="Rejeter" onClick={()=>handleReject(m.id)}/>
+                                                        {(user.is_admin || user.is_superadmin || user.is_paie || user.service_id === m.service_new_id) && (
+                                                            <ActionBtn color={CLR.success} icon="ri-check-double-line" title="Valider" onClick={()=>handleConfirm(m.id)}/>
+                                                        )}
+                                                        {(user.is_admin || user.is_superadmin || user.is_paie || user.service_id === m.service_new_id) && (
+                                                            <ActionBtn color={CLR.danger} icon="ri-close-circle-line" title="Rejeter" onClick={()=>handleReject(m.id)}/>
+                                                        )}
                                                         <ActionBtn color={CLR.secondary} icon="ri-forbid-line" title="Annuler" onClick={()=>handleCancel(m.id)}/>
                                                         <ActionBtn color={CLR.warning} icon="ri-delete-bin-line" title="Supprimer" onClick={()=>handleDelete(m.id)}/>
                                                     </>}
