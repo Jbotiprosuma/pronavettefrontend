@@ -304,12 +304,15 @@ const NavetteLaunchPage = () => {
     // ══ Prolonger une campagne exécutée ══
     const handleProlonger = async (campagne) => {
         const dateActuelle = campagne.periode_fin_at ? new Date(campagne.periode_fin_at).toISOString().split('T')[0] : '';
+        // Calculer le dernier jour du mois de la campagne
+        const dernierJourMoisCampagne = new Date(campagne.annee, campagne.mois, 0).toISOString().split('T')[0];
 
         const { value: nouvelleDateFin } = await Swal.fire({
             title: 'Prolonger la campagne',
             html: `<p>Date de fin actuelle : <strong>${dateActuelle ? new Date(dateActuelle).toLocaleDateString('fr-FR') : 'N/A'}</strong></p>
-                   <label for="swal-new-date" class="form-label mt-3">Nouvelle date de fin :</label>
-                   <input type="date" id="swal-new-date" class="form-control" value="${dateActuelle}" min="${dateActuelle}">`,
+                   <p style="font-size:.84rem;color:#878a99">La prolongation doit rester dans le mois de <strong>${MOIS_NOMS[campagne.mois - 1]} ${campagne.annee}</strong> (jusqu'au ${new Date(dernierJourMoisCampagne).toLocaleDateString('fr-FR')} maximum).</p>
+                   <label for="swal-new-date" class="form-label mt-2">Nouvelle date de fin :</label>
+                   <input type="date" id="swal-new-date" class="form-control" value="${dateActuelle}" min="${dateActuelle}" max="${dernierJourMoisCampagne}">`,
             showCancelButton: true,
             confirmButtonColor: '#0ab39c',
             confirmButtonText: 'Prolonger',
@@ -317,7 +320,8 @@ const NavetteLaunchPage = () => {
             preConfirm: () => {
                 const val = document.getElementById('swal-new-date').value;
                 if (!val) { Swal.showValidationMessage('Veuillez saisir une date.'); return false; }
-                if (new Date(val) <= new Date(dateActuelle)) { Swal.showValidationMessage('La nouvelle date doit être postérieure.'); return false; }
+                if (new Date(val) <= new Date(dateActuelle)) { Swal.showValidationMessage('La nouvelle date doit être postérieure à la date actuelle.'); return false; }
+                if (val > dernierJourMoisCampagne) { Swal.showValidationMessage(`La date doit être dans le mois de ${MOIS_NOMS[campagne.mois - 1]} ${campagne.annee}.`); return false; }
                 return val;
             }
         });
@@ -978,16 +982,20 @@ const NavetteLaunchPage = () => {
                                                     ) : (
                                                         /* ── Actions campagne exécutée ── */
                                                         <>
-                                                            {!isCampagneTerminee(campagne) && campagne.totalSaisies === 0 && (
+                                                            {/* Modifier (2 dates) : uniquement si aucun service n'a encore avancé sa navette */}
+                                                            {!isCampagneTerminee(campagne) && campagne.navettes.every(n => n.status === 'En attente') && (
                                                                 <button className="launch-btn launch-btn-primary" onClick={() => handleModifierDates(campagne)}
-                                                                    title="Modifier les dates">
+                                                                    title="Modifier les dates (début &amp; fin)">
                                                                     <i className="ri-edit-line" />
                                                                 </button>
                                                             )}
-                                                            <button className="launch-btn launch-btn-info" onClick={() => handleProlonger(campagne)}
-                                                                title="Prolonger">
-                                                                <i className="ri-calendar-event-line" />
-                                                            </button>
+                                                            {/* Prolonger (date de fin uniquement) : toujours disponible pour la paie */}
+                                                            {!isCampagneTerminee(campagne) && (
+                                                                <button className="launch-btn launch-btn-info" onClick={() => handleProlonger(campagne)}
+                                                                    title="Prolonger (date de fin uniquement)">
+                                                                    <i className="ri-calendar-event-line" />
+                                                                </button>
+                                                            )}
                                                             {campagne.isDeletable && !isExpired(campagne.periode_fin_at) && !isCampagneTerminee(campagne) && (
                                                                 <button className="launch-btn launch-btn-danger" onClick={() => handleDeleteExecuted(campagne)}
                                                                     title="Supprimer">
