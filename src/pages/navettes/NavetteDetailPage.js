@@ -1133,18 +1133,6 @@ const NavetteDetailPage = () => {
                         <optgroup label="Acompte">
                             <option value="CL30">CL30 - Acompte</option>
                         </optgroup>
-                        <optgroup label="Retenues">
-                            <option value="CL31">CL31 - Retenue 1</option>
-                            <option value="CL32">CL32 - Retenue 2</option>
-                            <option value="CL33">CL33 - Retenue 3</option>
-                            <option value="CL34">CL34 - Retenue 4</option>
-                            <option value="CL35">CL35 - Retenue 5</option>
-                            <option value="CL36">CL36 - Retenue 6</option>
-                            <option value="CL37">CL37 - Retenue 7</option>
-                            <option value="CL38">CL38 - Retenue 8</option>
-                            <option value="CL39">CL39 - Retenue 9</option>
-                            <option value="CL40">CL40 - Retenue 10</option>
-                        </optgroup>
                     </select>
                 </div>
                 <div className="mb-3">
@@ -1256,17 +1244,7 @@ const NavetteDetailPage = () => {
                     >
                         <option value=""></option>
                         <optgroup label="Primes courantes">
-                            {['PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE', 'PRIME DE PANIER', 'PRIME DE TRANSPORT', 'PRIME DE FIN D ANNEE', 'PRIME FIXE IMPOSABLE', 'PRIME FIXE NON IMPOSABLE', 'PRIME DIVERS'].map(type => (
-                                <option key={type} value={type}>{type}</option>
-                            ))}
-                        </optgroup>
-                        <optgroup label="Primes supplémentaires">
-                            {['PRIME SURSALAIRE', 'PRIME RAPPEL AUGMENTATION', 'PRIME SEMESTRIELLE', 'PRIME DE DEPART', 'PRIME FRAIS FUNERAIRES', 'PRIME ASTREINTE PROXIMITE', 'PRIME CAISSE PROXIMITE', 'PRIME JOUR SUPPLEMENTAIRE', 'PRIME VACCINATION'].map(type => (
-                                <option key={type} value={type}>{type}</option>
-                            ))}
-                        </optgroup>
-                        <optgroup label="Indemnités">
-                            {['INDEMNITE PREAVIS', 'INDEMNITE AGGRAVATION', 'INDEMNITE LICENCIEMENT IMPOSABLE', 'INDEMNITE DECES IMPOSABLE', 'INDEMNITE RETRAITE IMPOSABLE', 'INDEMNITE DEPART CDD IMPOSABLE', 'INDEMNITE LICENCIEMENT NON IMPOSABLE', 'INDEMNITE DECES NON IMPOSABLE', 'INDEMNITE RETRAITE NON IMPOSABLE', 'INDEMNITE FIXE DEPART NON IMPOSABLE', 'INDEMNITE DEPART CDD NON IMPOSABLE'].map(type => (
+                            {['PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE', 'PRIME DE PANIER', 'PRIME DE TRANSPORT DE NUIT'].map(type => (
                                 <option key={type} value={type}>{type}</option>
                             ))}
                         </optgroup>
@@ -1311,8 +1289,6 @@ const NavetteDetailPage = () => {
                     <label className="form-label">Code prime <span style={{ color: 'red' }} >*</span></label>
                     <select className="form-select" value={primeNuitFormData.code_prime_nuit} onChange={(e) => setPrimeNuitFormData({ ...primeNuitFormData, code_prime_nuit: e.target.value })} required>
                         <option value="CL12">CL12 — Prime de nuit</option>
-                        <option value="CL06">CL06 — Prime panier</option>
-                        <option value="CL22">CL22 — Complément nuit</option>
                     </select>
                 </div>
                 <div className="mb-3">
