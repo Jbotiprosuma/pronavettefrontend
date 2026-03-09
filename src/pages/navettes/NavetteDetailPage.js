@@ -162,9 +162,6 @@ const NavetteDetailPage = () => {
 
             setNavetteLines(sortedNavetteLines);
 
-            // Rafraîchir la ligne dans le modal d'actions s'il est ouvert
-            refreshActionModalLine(sortedNavetteLines);
-
         } catch (error) {
             console.error('Erreur lors de la récupération des informations :', error);
             Swal.fire('Erreur', 'Impossible de charger les données de la navette.', 'error');
@@ -333,15 +330,20 @@ const NavetteDetailPage = () => {
         setCurrentNavetteLigne(null);
     };
 
-    const refreshActionModalLine = (newNavetteLines) => {
-        if (isActionModalOpen && actionModalLine) {
-            const updatedLine = newNavetteLines.find(l => l.id === actionModalLine.id);
+    // Quand navetteLines se met à jour (après un fetchNavetteData), si le modal
+    // d'actions est ouvert, on rafraîchit automatiquement la ligne affichée.
+    // Ce useEffect lit toujours les valeurs courantes de isActionModalOpen et
+    // actionModalLine, évitant ainsi le problème de closure stale.
+    useEffect(() => {
+        if (isActionModalOpen && actionModalLine && navetteLines.length > 0) {
+            const updatedLine = navetteLines.find(l => l.id === actionModalLine.id);
             if (updatedLine) {
                 setActionModalLine(updatedLine);
                 setCurrentNavetteLigne(updatedLine);
             }
         }
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navetteLines]);
 
     const handleChildSubmitImages = async (entityType, formData, isEdit, id = null, newFiles = [], filesToDelete = []) => {
         try {
