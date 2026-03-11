@@ -29,6 +29,7 @@ const customModalStyles = {
     overlay: {
         backgroundColor: 'rgba(15,23,42,.6)',
         backdropFilter: 'blur(4px)',
+        zIndex: 1050,
     },
 };
 
