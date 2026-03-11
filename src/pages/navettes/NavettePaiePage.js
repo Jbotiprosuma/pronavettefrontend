@@ -60,6 +60,11 @@ const NavettePaiePage = () => {
     const [countdown, setCountdown] = useState(null);
     const [isSignalementModalOpen, setIsSignalementModalOpen] = useState(false);
     const [signalementSelections, setSignalementSelections] = useState({});
+    const [signalementSearch, setSignalementSearch] = useState('');
+    const [signalementFilter, setSignalementFilter] = useState('all');
+    const [isCorrectionReviewOpen, setIsCorrectionReviewOpen] = useState(false);
+    const [correctionReviewActions, setCorrectionReviewActions] = useState({});
+    const [correctionReviewSearch, setCorrectionReviewSearch] = useState('');
 
     const fetchNavetteData = useCallback(async () => {
         try {
@@ -153,6 +158,8 @@ const NavettePaiePage = () => {
             };
         });
         setSignalementSelections(selections);
+        setSignalementSearch('');
+        setSignalementFilter('all');
         setIsSignalementModalOpen(true);
     };
 
@@ -204,6 +211,70 @@ const NavettePaiePage = () => {
             await fetchNavetteData();
         } catch (error) {
             Swal.fire('Erreur', error.response?.data?.message || 'Impossible de signaler le problème.', 'error');
+        }
+    };
+
+    // ── Correction Review (Paie valide/rejette les corrections) ──
+    const openCorrectionReview = () => {
+        const actions = {};
+        navetteLines.filter(l => l.correction_status === 'corrected').forEach(line => {
+            actions[line.id] = { action: null, rejectComment: '' };
+        });
+        setCorrectionReviewActions(actions);
+        setCorrectionReviewSearch('');
+        setIsCorrectionReviewOpen(true);
+    };
+
+    const handleCorrectionAction = (lineId, action) => {
+        setCorrectionReviewActions(prev => ({
+            ...prev,
+            [lineId]: { ...prev[lineId], action, rejectComment: action === 'reject' ? (prev[lineId]?.rejectComment || '') : '' }
+        }));
+    };
+
+    const handleCorrectionRejectComment = (lineId, comment) => {
+        setCorrectionReviewActions(prev => ({
+            ...prev,
+            [lineId]: { ...prev[lineId], rejectComment: comment }
+        }));
+    };
+
+    const handleCorrectionReviewSubmit = async () => {
+        const validations = [];
+        const rejections = [];
+        for (const [id, act] of Object.entries(correctionReviewActions)) {
+            if (act.action === 'validate') validations.push(parseInt(id));
+            else if (act.action === 'reject') rejections.push({ navette_ligne_id: parseInt(id), comment: act.rejectComment });
+        }
+
+        if (validations.length === 0 && rejections.length === 0) {
+            Swal.fire('Attention', 'Veuillez valider ou rejeter au moins une correction.', 'warning');
+            return;
+        }
+
+        const hasEmptyRejectComments = rejections.some(r => !r.comment || !r.comment.trim());
+        if (hasEmptyRejectComments) {
+            Swal.fire('Attention', 'Chaque ligne rejetée doit avoir un commentaire obligatoire.', 'warning');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: 'Confirmer le traitement ?',
+            html: `<p>${validations.length} correction(s) validée(s)</p>${rejections.length > 0 ? `<p class="text-danger">${rejections.length} correction(s) rejetée(s) — renvoyées au service</p>` : ''}`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Confirmer',
+            cancelButtonText: 'Annuler',
+        });
+        if (!result.isConfirmed) return;
+
+        try {
+            await api.put(`navettes/${navette.id}/validate-corrections`, { validations, rejections });
+            Swal.fire('Succès', rejections.length > 0 ? 'Corrections traitées. Les rejets ont été renvoyés au service.' : 'Toutes les corrections ont été validées !', 'success');
+            setIsCorrectionReviewOpen(false);
+            await fetchNavetteData();
+        } catch (error) {
+            Swal.fire('Erreur', error.response?.data?.message || 'Impossible de traiter les corrections.', 'error');
         }
     };
 
@@ -301,6 +372,11 @@ const NavettePaiePage = () => {
             });
         }
         list.sort((a, b) => {
+            // Lignes avec corrections en haut
+            const aCorrPriority = (a.correction_status === 'corrected' || a.correction_status === 'signaled') ? 0 : (a.correction_status === 'validated' ? 1 : 2);
+            const bCorrPriority = (b.correction_status === 'corrected' || b.correction_status === 'signaled') ? 0 : (b.correction_status === 'validated' ? 1 : 2);
+            if (aCorrPriority !== bCorrPriority) return aCorrPriority - bCorrPriority;
+
             const { key, dir } = sortConfig;
             let va, vb;
             if (key === 'nom') { va = `${a.employer.nom} ${a.employer.prenom}`; vb = `${b.employer.nom} ${b.employer.prenom}`; }
@@ -335,88 +411,306 @@ const NavettePaiePage = () => {
 
     const renderSignalementModal = () => {
         const selectedCount = Object.values(signalementSelections).filter(v => v.checked).length;
+        const totalCount = navetteLines.length;
+        const cadreCount = navetteLines.filter(l => l.status === 'Cadre').length;
+        const nonCadreCount = totalCount - cadreCount;
+
+        const filteredSignalementLines = navetteLines.filter(line => {
+            if (signalementFilter === 'cadre' && line.status !== 'Cadre') return false;
+            if (signalementFilter === 'noncadre' && line.status === 'Cadre') return false;
+            if (signalementSearch.trim()) {
+                const q = signalementSearch.toLowerCase();
+                const full = `${line.employer.matricule} ${line.employer.nom} ${line.employer.prenom}`.toLowerCase();
+                if (!full.includes(q)) return false;
+            }
+            return true;
+        }).sort((a, b) => {
+            const aChecked = signalementSelections[a.id]?.checked ? 0 : 1;
+            const bChecked = signalementSelections[b.id]?.checked ? 0 : 1;
+            return aChecked - bChecked;
+        });
+
+        const filterBtn = (key, label, count, icon) => {
+            const active = signalementFilter === key;
+            return (
+                <button key={key} onClick={() => setSignalementFilter(key)}
+                    style={{ padding: '5px 14px', borderRadius: 20, border: active ? 'none' : '1px solid #dee2e6', background: active ? '#f06548' : '#fff', color: active ? '#fff' : '#495057', fontSize: '.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all .2s' }}>
+                    <i className={icon} style={{ fontSize: '.8rem' }}></i>{label}
+                    <span style={{ background: active ? 'rgba(255,255,255,.25)' : '#f0f2f5', padding: '0 7px', borderRadius: 10, fontSize: '.68rem', fontWeight: 700, marginLeft: 2 }}>{count}</span>
+                </button>
+            );
+        };
 
         return (
             <Modal isOpen={isSignalementModalOpen} onRequestClose={() => setIsSignalementModalOpen(false)}
-                style={{ ...customModalStyles, content: { ...customModalStyles.content, maxWidth: '780px' } }}
+                style={{ ...customModalStyles, content: { ...customModalStyles.content, maxWidth: '820px' } }}
                 contentLabel="Signaler des corrections">
-                <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #f06548, #d9534f)' }}>
+                {/* ── Header ── */}
+                <div style={{ background: 'linear-gradient(135deg, #d9534f 0%, #c9302c 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div className="d-flex align-items-center gap-3">
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <i className="ri-error-warning-line" style={{ fontSize: '1.2rem', color: '#fff' }}></i>
+                        <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className="ri-error-warning-line" style={{ fontSize: '1.3rem', color: '#fff' }}></i>
                         </div>
                         <div>
-                            <h5 className="mb-0 text-white" style={{ fontSize: '1.05rem', fontWeight: 700 }}>Signaler des corrections</h5>
-                            <span style={{ color: 'rgba(255,255,255,.7)', fontSize: '.75rem' }}>Sélectionnez les lignes à corriger et ajoutez vos commentaires</span>
+                            <h5 className="mb-0 text-white" style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: '.01em' }}>Signaler des corrections</h5>
+                            <span style={{ color: 'rgba(255,255,255,.7)', fontSize: '.74rem' }}>Cochez les lignes, ajoutez un commentaire obligatoire</span>
                         </div>
                     </div>
-                    <button onClick={() => setIsSignalementModalOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
+                    <button onClick={() => setIsSignalementModalOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 34, height: 34, borderRadius: 8, fontSize: '.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.3)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,.15)'}>✕</button>
                 </div>
-                <div className="modal-body-c" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                    <div className="d-flex align-items-center justify-content-between mb-3 p-2" style={{ background: '#f8f9fa', borderRadius: 10 }}>
-                        <span style={{ fontSize: '.82rem', color: '#495057', fontWeight: 600 }}>
-                            <i className="ri-checkbox-multiple-line me-1 text-primary"></i>
-                            {selectedCount} ligne{selectedCount > 1 ? 's' : ''} sélectionnée{selectedCount > 1 ? 's' : ''}
-                        </span>
-                        <span style={{ fontSize: '.75rem', color: '#878a99' }}>{navetteLines.length} employés au total</span>
+
+                {/* ── Toolbar : recherche + filtres ── */}
+                <div style={{ padding: '14px 24px 10px', borderBottom: '1px solid #eef0f3', background: '#fbfbfd' }}>
+                    <div style={{ position: 'relative', marginBottom: 10 }}>
+                        <i className="ri-search-line" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#adb5bd', fontSize: '.9rem' }}></i>
+                        <input
+                            type="text"
+                            placeholder="Rechercher par matricule, nom ou prénom..."
+                            value={signalementSearch}
+                            onChange={e => setSignalementSearch(e.target.value)}
+                            style={{ width: '100%', padding: '9px 12px 9px 36px', border: '1.5px solid #e2e5ea', borderRadius: 10, fontSize: '.82rem', outline: 'none', background: '#fff', transition: 'border-color .2s' }}
+                            onFocus={e => e.target.style.borderColor = '#f06548'}
+                            onBlur={e => e.target.style.borderColor = '#e2e5ea'}
+                        />
+                        {signalementSearch && (
+                            <button onClick={() => setSignalementSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#adb5bd', cursor: 'pointer', fontSize: '.85rem', padding: 0 }}>
+                                <i className="ri-close-circle-fill"></i>
+                            </button>
+                        )}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {navetteLines.map(line => {
-                            const sel = signalementSelections[line.id] || { checked: false, comment: '' };
-                            const emp = line.employer;
-                            return (
-                                <div key={line.id} style={{
-                                    border: sel.checked ? '2px solid #f06548' : '1.5px solid #e9ecef',
-                                    borderRadius: 12, padding: '12px 16px',
-                                    background: sel.checked ? '#fef2f0' : '#fff',
-                                    transition: 'all .2s',
-                                }}>
-                                    <div className="d-flex align-items-center gap-3">
-                                        <input type="checkbox" className="form-check-input"
-                                            checked={sel.checked}
-                                            onChange={() => handleSignalementToggle(line.id)}
-                                            style={{ width: 20, height: 20, cursor: 'pointer' }}
-                                        />
-                                        <div style={{ flex: 1 }}>
-                                            <div className="d-flex align-items-center gap-2">
-                                                <span className="fw-semibold" style={{ fontSize: '.85rem' }}>{emp.nom} {emp.prenom}</span>
-                                                <code style={{ fontSize: '.72rem', background: '#f0f2f5', padding: '1px 6px', borderRadius: 4 }}>{emp.matricule}</code>
-                                                <span className={`badge rounded-pill ${line.status === 'Cadre' ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`} style={{ fontSize: '.62rem' }}>{line.status}</span>
+                    <div className="d-flex align-items-center justify-content-between">
+                        <div className="d-flex gap-2">
+                            {filterBtn('all', 'Tous', totalCount, 'ri-group-line')}
+                            {filterBtn('cadre', 'Cadres', cadreCount, 'ri-briefcase-4-line')}
+                            {filterBtn('noncadre', 'Non cadres', nonCadreCount, 'ri-user-line')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '.73rem', color: '#878a99' }}>{filteredSignalementLines.length} résultat{filteredSignalementLines.length > 1 ? 's' : ''}</span>
+                            {selectedCount > 0 && (
+                                <span style={{ background: '#fef2f0', color: '#d9534f', padding: '3px 10px', borderRadius: 12, fontSize: '.72rem', fontWeight: 700 }}>
+                                    <i className="ri-checkbox-circle-fill me-1" style={{ fontSize: '.7rem' }}></i>{selectedCount} sélectionnée{selectedCount > 1 ? 's' : ''}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Liste des lignes ── */}
+                <div style={{ padding: '16px 24px', maxHeight: '52vh', overflowY: 'auto' }}>
+                    {filteredSignalementLines.length === 0 ? (
+                        <div className="text-center py-4">
+                            <i className="ri-search-eye-line d-block mb-2" style={{ fontSize: '2rem', color: '#ced4da' }}></i>
+                            <p style={{ fontSize: '.82rem', color: '#878a99', margin: 0 }}>Aucun employé ne correspond à votre recherche</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {filteredSignalementLines.map(line => {
+                                const sel = signalementSelections[line.id] || { checked: false, comment: '' };
+                                const emp = line.employer;
+                                const isCadre = line.status === 'Cadre';
+                                return (
+                                    <div key={line.id}
+                                        onClick={() => handleSignalementToggle(line.id)}
+                                        style={{
+                                            border: sel.checked ? '2px solid #f06548' : '1.5px solid #eef0f3',
+                                            borderRadius: 10, padding: '10px 14px',
+                                            background: sel.checked ? '#fef6f5' : '#fff',
+                                            cursor: 'pointer', transition: 'all .15s',
+                                            boxShadow: sel.checked ? '0 2px 8px rgba(240,101,72,.1)' : 'none',
+                                        }}>
+                                        <div className="d-flex align-items-center gap-3">
+                                            <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }}>
+                                                <input type="checkbox" className="form-check-input"
+                                                    checked={sel.checked}
+                                                    onChange={() => handleSignalementToggle(line.id)}
+                                                    style={{ width: 18, height: 18, cursor: 'pointer', borderColor: sel.checked ? '#f06548' : '#ced4da' }}
+                                                />
                                             </div>
-                                            <div className="d-flex gap-3 mt-1" style={{ fontSize: '.72rem', color: '#878a99' }}>
-                                                <span>Jours: {line.nb_jours}</span>
-                                                <span>Abs: {line.nb_jour_abs || 0}</span>
-                                                <span>Acompte: {line.accompte ? `${line.accompte.toLocaleString()} F` : '—'}</span>
-                                                <span>P.Nuit: {line.prime_nuit || '—'}</span>
+                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: isCadre ? '#fff4e5' : '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <i className={isCadre ? 'ri-briefcase-4-fill' : 'ri-user-3-fill'} style={{ fontSize: '.85rem', color: isCadre ? '#e8a317' : '#2e7d32' }}></i>
                                             </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                                                    <span className="fw-semibold text-truncate" style={{ fontSize: '.84rem', color: '#212529' }}>{emp.nom} {emp.prenom}</span>
+                                                    <code style={{ fontSize: '.7rem', background: '#f0f2f5', padding: '1px 7px', borderRadius: 4, color: '#6c757d', letterSpacing: '.03em' }}>{emp.matricule}</code>
+                                                    <span className={`badge rounded-pill ${isCadre ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`} style={{ fontSize: '.6rem', fontWeight: 600 }}>{line.status}</span>
+                                                </div>
+                                                <div className="d-flex gap-3 mt-1" style={{ fontSize: '.7rem', color: '#9ca3af' }}>
+                                                    <span><i className="ri-calendar-check-line me-1"></i>{line.nb_jours}j</span>
+                                                    <span><i className="ri-calendar-close-line me-1"></i>{line.nb_jour_abs || 0} abs</span>
+                                                    <span><i className="ri-money-dollar-circle-line me-1"></i>{line.accompte ? `${line.accompte.toLocaleString()} F` : '—'}</span>
+                                                    <span><i className="ri-moon-line me-1"></i>{line.prime_nuit || '—'}</span>
+                                                </div>
+                                            </div>
+                                            {sel.checked && <i className="ri-error-warning-fill" style={{ fontSize: '1.05rem', color: '#f06548', flexShrink: 0 }}></i>}
                                         </div>
-                                        {sel.checked && <i className="ri-error-warning-fill text-danger" style={{ fontSize: '1.1rem' }}></i>}
+                                        {sel.checked && (
+                                            <div className="mt-2" style={{ marginLeft: 54 }} onClick={e => e.stopPropagation()}>
+                                                <textarea
+                                                    className="form-control"
+                                                    placeholder="Décrivez le problème constaté sur cette ligne..."
+                                                    value={sel.comment}
+                                                    onChange={(e) => handleSignalementComment(line.id, e.target.value)}
+                                                    rows={2}
+                                                    style={{ fontSize: '.8rem', borderColor: '#f0654880', borderRadius: 8, resize: 'vertical', background: '#fff' }}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-                                    {sel.checked && (
-                                        <div className="mt-2" style={{ marginLeft: 36 }}>
-                                            <textarea
-                                                className="form-control"
-                                                placeholder="Décrivez le problème constaté sur cette ligne..."
-                                                value={sel.comment}
-                                                onChange={(e) => handleSignalementComment(line.id, e.target.value)}
-                                                rows={2}
-                                                style={{ fontSize: '.82rem', borderColor: '#f06548', borderRadius: 8, resize: 'vertical' }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
-                <div style={{ padding: '14px 24px', borderTop: '1px solid #e9ecef', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                {/* ── Footer ── */}
+                <div style={{ padding: '14px 24px', borderTop: '1px solid #eef0f3', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '.78rem', color: '#878a99' }}>
-                        {selectedCount > 0 ? <><i className="ri-error-warning-line text-danger me-1"></i>{selectedCount} correction{selectedCount > 1 ? 's' : ''} à envoyer</> : 'Aucune ligne sélectionnée'}
+                        {selectedCount > 0
+                            ? <><i className="ri-error-warning-line text-danger me-1"></i>{selectedCount} correction{selectedCount > 1 ? 's' : ''} à signaler</>
+                            : 'Aucune ligne sélectionnée'}
                     </span>
                     <div className="d-flex gap-2">
-                        <button className="btn btn-light btn-sm" style={{ borderRadius: 8 }} onClick={() => setIsSignalementModalOpen(false)}>Annuler</button>
-                        <button className="btn btn-danger btn-sm" style={{ borderRadius: 8 }} disabled={selectedCount === 0} onClick={handleSignalementSubmit}>
+                        <button className="btn btn-light btn-sm" style={{ borderRadius: 8, fontWeight: 500 }} onClick={() => setIsSignalementModalOpen(false)}>Annuler</button>
+                        <button className="btn btn-danger btn-sm" style={{ borderRadius: 8, fontWeight: 600 }} disabled={selectedCount === 0} onClick={handleSignalementSubmit}>
                             <i className="ri-send-plane-fill me-1"></i>Envoyer le signalement
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        );
+    };
+
+    // ── Modal de révision des corrections ──
+    const correctionLines = navetteLines.filter(l => l.correction_status === 'corrected');
+    const renderCorrectionReviewModal = () => {
+        const validatedCount = Object.values(correctionReviewActions).filter(a => a.action === 'validate').length;
+        const rejectedCount = Object.values(correctionReviewActions).filter(a => a.action === 'reject').length;
+        const totalCorrected = correctionLines.length;
+
+        const filteredCorrectionLines = correctionLines.filter(line => {
+            if (correctionReviewSearch.trim()) {
+                const q = correctionReviewSearch.toLowerCase();
+                return `${line.employer.matricule} ${line.employer.nom} ${line.employer.prenom}`.toLowerCase().includes(q);
+            }
+            return true;
+        });
+
+        return (
+            <Modal isOpen={isCorrectionReviewOpen} onRequestClose={() => setIsCorrectionReviewOpen(false)}
+                style={{ ...customModalStyles, content: { ...customModalStyles.content, maxWidth: '850px' } }}
+                contentLabel="Valider les corrections">
+                {/* Header */}
+                <div style={{ background: 'linear-gradient(135deg, #0ab39c 0%, #099880 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="d-flex align-items-center gap-3">
+                        <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className="ri-checkbox-circle-line" style={{ fontSize: '1.3rem', color: '#fff' }}></i>
+                        </div>
+                        <div>
+                            <h5 className="mb-0 text-white" style={{ fontSize: '1.05rem', fontWeight: 700 }}>Valider les corrections</h5>
+                            <span style={{ color: 'rgba(255,255,255,.7)', fontSize: '.74rem' }}>{totalCorrected} correction{totalCorrected > 1 ? 's' : ''} en attente de validation</span>
+                        </div>
+                    </div>
+                    <button onClick={() => setIsCorrectionReviewOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 34, height: 34, borderRadius: 8, fontSize: '.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                </div>
+
+                {/* Search + Stats */}
+                <div style={{ padding: '14px 24px 10px', borderBottom: '1px solid #eef0f3', background: '#fbfbfd' }}>
+                    <div style={{ position: 'relative', marginBottom: 10 }}>
+                        <i className="ri-search-line" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#adb5bd', fontSize: '.9rem' }}></i>
+                        <input type="text" placeholder="Rechercher..." value={correctionReviewSearch} onChange={e => setCorrectionReviewSearch(e.target.value)}
+                            style={{ width: '100%', padding: '9px 12px 9px 36px', border: '1.5px solid #e2e5ea', borderRadius: 10, fontSize: '.82rem', outline: 'none', background: '#fff' }}
+                        />
+                    </div>
+                    <div className="d-flex gap-2 flex-wrap">
+                        {validatedCount > 0 && <span style={{ background: '#d1f5ea', color: '#0a7e5f', padding: '3px 10px', borderRadius: 12, fontSize: '.72rem', fontWeight: 700 }}><i className="ri-check-line me-1"></i>{validatedCount} validée{validatedCount > 1 ? 's' : ''}</span>}
+                        {rejectedCount > 0 && <span style={{ background: '#fef2f0', color: '#d9534f', padding: '3px 10px', borderRadius: 12, fontSize: '.72rem', fontWeight: 700 }}><i className="ri-close-line me-1"></i>{rejectedCount} rejetée{rejectedCount > 1 ? 's' : ''}</span>}
+                        <span style={{ fontSize: '.73rem', color: '#878a99', marginLeft: 'auto' }}>{filteredCorrectionLines.length} résultat{filteredCorrectionLines.length > 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+
+                {/* Lines */}
+                <div style={{ padding: '16px 24px', maxHeight: '52vh', overflowY: 'auto' }}>
+                    {filteredCorrectionLines.map(line => {
+                        const emp = line.employer;
+                        const act = correctionReviewActions[line.id] || { action: null, rejectComment: '' };
+                        const isValid = act.action === 'validate';
+                        const isReject = act.action === 'reject';
+                        return (
+                            <div key={line.id} style={{
+                                border: isValid ? '2px solid #0ab39c' : isReject ? '2px solid #f06548' : '1.5px solid #eef0f3',
+                                borderRadius: 10, padding: '12px 16px', marginBottom: 8,
+                                background: isValid ? '#f0fdf4' : isReject ? '#fef6f5' : '#fff',
+                                transition: 'all .15s',
+                            }}>
+                                <div className="d-flex align-items-start gap-3">
+                                    <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <i className="ri-refresh-line" style={{ fontSize: '.85rem', color: '#2e7d32' }}></i>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                            <span className="fw-semibold" style={{ fontSize: '.84rem' }}>{emp.nom} {emp.prenom}</span>
+                                            <code style={{ fontSize: '.7rem', background: '#f0f2f5', padding: '1px 7px', borderRadius: 4, color: '#6c757d' }}>{emp.matricule}</code>
+                                            <span className="badge bg-info-subtle text-info rounded-pill" style={{ fontSize: '.6rem' }}>Corrigée</span>
+                                        </div>
+                                        {/* Commentaire originel de la paie */}
+                                        <div style={{ fontSize: '.75rem', color: '#d9534f', marginTop: 4, background: '#fff5f5', padding: '4px 10px', borderRadius: 6, borderLeft: '3px solid #f06548' }}>
+                                            <strong>Signalement initial :</strong> {line.correction_comment || '—'}
+                                        </div>
+                                        {/* Réponse du service */}
+                                        {line.correction_response && (
+                                            <div style={{ fontSize: '.75rem', color: '#0a7e5f', marginTop: 4, background: '#f0faf5', padding: '4px 10px', borderRadius: 6, borderLeft: '3px solid #0ab39c' }}>
+                                                <strong>Réponse du service :</strong> {line.correction_response}
+                                            </div>
+                                        )}
+                                        {/* Stats */}
+                                        <div className="d-flex gap-3 mt-2" style={{ fontSize: '.7rem', color: '#9ca3af' }}>
+                                            <span><i className="ri-calendar-check-line me-1"></i>{line.nb_jours}j</span>
+                                            <span><i className="ri-calendar-close-line me-1"></i>{line.nb_jour_abs || 0} abs</span>
+                                            <span><i className="ri-money-dollar-circle-line me-1"></i>{line.accompte ? `${line.accompte.toLocaleString()} F` : '—'}</span>
+                                            <span><i className="ri-moon-line me-1"></i>{line.prime_nuit || '—'}</span>
+                                        </div>
+                                    </div>
+                                    {/* Action buttons */}
+                                    <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                        <button onClick={() => handleCorrectionAction(line.id, 'validate')}
+                                            style={{ width: 34, height: 34, borderRadius: 8, border: isValid ? 'none' : '1.5px solid #d1f5ea', background: isValid ? '#0ab39c' : '#f8fffe', color: isValid ? '#fff' : '#0ab39c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
+                                            title="Valider la correction">
+                                            <i className="ri-check-line" style={{ fontSize: '1rem' }}></i>
+                                        </button>
+                                        <button onClick={() => handleCorrectionAction(line.id, 'reject')}
+                                            style={{ width: 34, height: 34, borderRadius: 8, border: isReject ? 'none' : '1.5px solid #fde8e4', background: isReject ? '#f06548' : '#fff8f6', color: isReject ? '#fff' : '#f06548', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
+                                            title="Rejeter la correction">
+                                            <i className="ri-close-line" style={{ fontSize: '1rem' }}></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {isReject && (
+                                    <div className="mt-2" style={{ marginLeft: 44 }}>
+                                        <textarea className="form-control" placeholder="Raison du rejet (obligatoire)..."
+                                            value={act.rejectComment} onChange={e => handleCorrectionRejectComment(line.id, e.target.value)}
+                                            rows={2} style={{ fontSize: '.8rem', borderColor: '#f0654880', borderRadius: 8, resize: 'vertical', background: '#fff' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '14px 24px', borderTop: '1px solid #eef0f3', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '.78rem', color: '#878a99' }}>
+                        {validatedCount + rejectedCount > 0
+                            ? <>{validatedCount > 0 && <><i className="ri-check-line text-success me-1"></i>{validatedCount} </>}{rejectedCount > 0 && <><i className="ri-close-line text-danger me-1"></i>{rejectedCount} </>}</>
+                            : 'Aucune action effectuée'}
+                    </span>
+                    <div className="d-flex gap-2">
+                        <button className="btn btn-light btn-sm" style={{ borderRadius: 8, fontWeight: 500 }} onClick={() => setIsCorrectionReviewOpen(false)}>Annuler</button>
+                        <button className="btn btn-primary btn-sm" style={{ borderRadius: 8, fontWeight: 600 }} disabled={validatedCount + rejectedCount === 0} onClick={handleCorrectionReviewSubmit}>
+                            <i className="ri-checkbox-circle-fill me-1"></i>Confirmer le traitement
                         </button>
                     </div>
                 </div>
@@ -564,6 +858,11 @@ const NavettePaiePage = () => {
                                 }}>
                                     <i className="ri-file-excel-2-line me-1"></i>Exporter pour Sage
                                 </button>
+                                {navette.etat === "En attente du traitement de l'etat navette par la paie" && user.is_paie === true && correctionLines.length > 0 && (
+                                    <button type="button" className="btn btn-sm btn-soft-info" onClick={openCorrectionReview}>
+                                        <i className="ri-checkbox-circle-line me-1"></i>Valider les corrections ({correctionLines.length})
+                                    </button>
+                                )}
                                 {navette.etat === "En attente du traitement de l'etat navette par la paie" && user.is_paie === true && (
                                     <button type="button" className="btn btn-sm btn-soft-warning" onClick={openSignalementModal}>
                                         <i className="ri-error-warning-line me-1"></i>Signaler des corrections
@@ -595,6 +894,18 @@ const NavettePaiePage = () => {
                     </div>
 
                     {/* ── TABLE CUSTOM ── */}
+                    {/* Correction Banner */}
+                    {correctionLines.length > 0 && navette.etat === "En attente du traitement de l'etat navette par la paie" && (
+                        <div className="alert d-flex align-items-center mb-3 py-2 px-3" style={{ borderRadius: 10, background: 'linear-gradient(135deg, rgba(10,179,156,.08), rgba(10,179,156,.03))', border: '1px solid rgba(10,179,156,.25)' }}>
+                            <i className="ri-refresh-line me-2 fs-5" style={{ color: '#0ab39c' }}></i>
+                            <span style={{ fontSize: '.82rem', color: '#495057', flex: 1 }}>
+                                <strong>{correctionLines.length} correction{correctionLines.length > 1 ? 's' : ''}</strong> en attente de validation — les lignes corrigées sont mises en évidence ci-dessous.
+                            </span>
+                            <button className="btn btn-sm btn-primary" style={{ borderRadius: 8, fontSize: '.78rem' }} onClick={openCorrectionReview}>
+                                <i className="ri-checkbox-circle-line me-1"></i>Valider
+                            </button>
+                        </div>
+                    )}
                     <div className="card border-0" style={{ borderRadius: 14, boxShadow: '0 2px 12px rgba(0,0,0,.06)' }}>
                         <div className="card-header bg-transparent d-flex align-items-center py-3 flex-wrap gap-2">
                             <h5 className="card-title mb-0 flex-grow-1 fw-semibold" style={{ fontSize: '1rem' }}>
@@ -634,7 +945,7 @@ const NavettePaiePage = () => {
 
                                             return (
                                                 <React.Fragment key={line.id}>
-                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s' }}>
+                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s', background: line.correction_status === 'corrected' ? 'rgba(10,179,156,.08)' : line.correction_status === 'validated' ? 'rgba(10,179,156,.04)' : 'transparent' }}>
                                                         <td>
                                                             <button onClick={() => toggleRow(line.id)} className="btn btn-sm p-0 border-0" style={{ width: 24, height: 24, borderRadius: 6, background: isExpanded ? '#405189' : '#e9ecef', color: isExpanded ? '#fff' : '#878a99', fontSize: '.7rem', transition: 'all .2s' }}>
                                                                 <i className={isExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}></i>
@@ -648,6 +959,9 @@ const NavettePaiePage = () => {
                                                             <span className={`fw-semibold ${isMutOut ? 'text-muted text-decoration-line-through' : ''}`}>{emp.nom} {emp.prenom}</span>
                                                             {isMutOut && <span className="badge bg-danger-subtle text-danger ms-2" style={{ fontSize: '.6rem' }}>Sortant</span>}
                                                             {isMutIn && <span className="badge bg-info-subtle text-info ms-2" style={{ fontSize: '.6rem' }}>Entrant</span>}
+                                                            {line.correction_status === 'corrected' && <span className="badge bg-info-subtle text-info ms-2" style={{ fontSize: '.58rem' }}><i className="ri-refresh-line me-1"></i>Corrigée</span>}
+                                                            {line.correction_status === 'validated' && <span className="badge bg-success-subtle text-success ms-2" style={{ fontSize: '.58rem' }}><i className="ri-check-line me-1"></i>Validée</span>}
+                                                            {line.correction_status === 'signaled' && <span className="badge bg-danger-subtle text-danger ms-2" style={{ fontSize: '.58rem' }}><i className="ri-error-warning-line me-1"></i>Signalée</span>}
                                                         </td>
                                                         <td className="text-center fw-semibold">{line.nb_jours}</td>
                                                         <td className="text-center">{line.nb_jour_abs || <span className="text-muted">—</span>}</td>
@@ -660,6 +974,23 @@ const NavettePaiePage = () => {
                                                     {isExpanded && (
                                                         <tr className="expand-row">
                                                             <td colSpan={11} style={{ padding: '14px 16px 14px 48px' }}>
+                                                                {/* Correction details */}
+                                                                {line.correction_flag && (
+                                                                    <div className="mb-3">
+                                                                        <div className="d-flex gap-2 flex-wrap">
+                                                                            {line.correction_comment && (
+                                                                                <div style={{ flex: 1, minWidth: 250, fontSize: '.78rem', color: '#d9534f', background: '#fff5f5', padding: '8px 12px', borderRadius: 8, borderLeft: '3px solid #f06548' }}>
+                                                                                    <strong><i className="ri-error-warning-fill me-1"></i>Signalement paie :</strong> {line.correction_comment}
+                                                                                </div>
+                                                                            )}
+                                                                            {line.correction_response && (
+                                                                                <div style={{ flex: 1, minWidth: 250, fontSize: '.78rem', color: '#0a7e5f', background: '#f0faf5', padding: '8px 12px', borderRadius: 8, borderLeft: '3px solid #0ab39c' }}>
+                                                                                    <strong><i className="ri-chat-check-line me-1"></i>Réponse service :</strong> {line.correction_response}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                                 <div className="row g-3">
                                                                     {/* Absences */}
                                                                     <div className="col-lg-6">
@@ -745,6 +1076,7 @@ const NavettePaiePage = () => {
             {renderImageModal()}
             {renderSingleImageModal()}
             {renderSignalementModal()}
+            {renderCorrectionReviewModal()}
         </>
     );
 };

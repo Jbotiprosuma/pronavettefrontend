@@ -503,27 +503,72 @@ const NavetteDetailPage = () => {
     };
 
     const handleSendToPayroll = async () => {
-        Swal.fire({
-            title: 'Envoyer à la paie ?',
-            text: "Confirmez-vous l'envoi de l'état navette à la paie ?",
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Oui, envoyer!',
-            cancelButtonText: 'Annuler'
-        }).then(async (result) => {
+        const correctedLines = navetteLines.filter(l => l.correction_status === 'corrected' || l.correction_status === 'signaled');
+        
+        if (correctedLines.length > 0) {
+            // Build HTML for response comments per corrected line
+            const linesHtml = correctedLines.map(l => 
+                `<div style="text-align:left;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;border-left:3px solid ${l.correction_status === 'corrected' ? '#0ab39c' : '#f06548'}">
+                    <strong>${l.employer.matricule} — ${l.employer.nom} ${l.employer.prenom}</strong>
+                    <span class="badge" style="background:${l.correction_status === 'corrected' ? '#0ab39c' : '#f06548'};color:#fff;font-size:.65rem;margin-left:6px">${l.correction_status === 'corrected' ? 'Corrigée' : 'Signalée'}</span>
+                    <div style="font-size:.8rem;color:#6c757d;margin-top:4px"><em>Signalement : ${l.correction_comment || 'Aucun commentaire'}</em></div>
+                    <textarea id="resp_${l.id}" class="swal2-textarea" placeholder="Réponse optionnelle..." style="width:100%;margin-top:6px;font-size:.82rem;min-height:50px;border-radius:6px"></textarea>
+                </div>`
+            ).join('');
+            
+            const result = await Swal.fire({
+                title: 'Envoyer à la paie',
+                html: `<p style="font-size:.85rem;color:#495057">Vous avez <strong>${correctedLines.length} ligne(s) avec corrections</strong>. Vous pouvez ajouter une réponse pour chaque ligne :</p>${linesHtml}`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: '<i class="ri-send-plane-fill me-1"></i>Envoyer',
+                cancelButtonText: 'Annuler',
+                width: 600,
+                preConfirm: () => {
+                    return correctedLines.map(l => ({
+                        navette_ligne_id: l.id,
+                        response: document.getElementById(`resp_${l.id}`)?.value?.trim() || ''
+                    })).filter(r => r.response);
+                }
+            });
+            
             if (result.isConfirmed) {
                 try {
-                    await api.put(`navettes/${navette.id}/send-to-payroll`);
-                    Swal.fire('Succès', 'Navette envoyée à la paie avec succès!', 'success');
-                    await fetchNavetteData(); // Recharger pour afficher le nouvel état
+                    await api.put(`navettes/${navette.id}/send-to-payroll`, {
+                        lignes_responses: result.value
+                    });
+                    Swal.fire('Succès', 'Navette envoyée à la paie avec les réponses aux corrections!', 'success');
+                    await fetchNavetteData();
                 } catch (error) {
                     console.error('Erreur lors de l\'envoi à la paie :', error.response?.data?.message || error.message);
                     Swal.fire('Erreur', error.response?.data?.message || 'Impossible d\'envoyer la navette à la paie.', 'error');
                 }
             }
-        });
+        } else {
+            Swal.fire({
+                title: 'Envoyer à la paie ?',
+                text: "Confirmez-vous l'envoi de l'état navette à la paie ?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Oui, envoyer!',
+                cancelButtonText: 'Annuler'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        await api.put(`navettes/${navette.id}/send-to-payroll`);
+                        Swal.fire('Succès', 'Navette envoyée à la paie avec succès!', 'success');
+                        await fetchNavetteData();
+                    } catch (error) {
+                        console.error('Erreur lors de l\'envoi à la paie :', error.response?.data?.message || error.message);
+                        Swal.fire('Erreur', error.response?.data?.message || 'Impossible d\'envoyer la navette à la paie.', 'error');
+                    }
+                }
+            });
+        }
     };
 
 
@@ -1462,6 +1507,15 @@ const NavetteDetailPage = () => {
     );
 
     const sortedNavetteLines = [...navetteLines].sort((a, b) => {
+        // Priorité correction : signaled/rejected → top, corrected → next, others → bottom
+        const corrPriority = (l) => {
+            if (l.correction_status === 'signaled') return 0;
+            if (l.correction_status === 'corrected') return 1;
+            if (l.correction_status === 'validated') return 2;
+            return 3;
+        };
+        const pa = corrPriority(a), pb = corrPriority(b);
+        if (pa !== pb) return pa - pb;
         if (a.status === 'Cadre' && b.status !== 'Cadre') return -1;
         if (b.status === 'Cadre' && a.status !== 'Cadre') return 1;
         const nomA = `${a.employer.nom} ${a.employer.prenom}`;
@@ -1750,11 +1804,18 @@ const NavetteDetailPage = () => {
                             <span className="badge bg-primary-subtle text-primary rounded-pill px-3">{filteredLines.length} / {navetteLines.length}</span>
                         </div>
                         <div className="card-body p-0" style={{ overflowX: 'auto' }}>
-                            {navetteLines.some(l => l.correction_flag) && (
+                            {navetteLines.some(l => l.correction_status === 'signaled' || l.correction_status === 'corrected') && (
                                 <div className="alert alert-danger d-flex align-items-center m-3 mb-0 py-2 px-3" style={{ borderRadius: 10, background: 'linear-gradient(135deg, rgba(240,101,72,.08), rgba(240,101,72,.04))', border: '1px solid rgba(240,101,72,.25)' }}>
                                     <i className="ri-error-warning-fill me-2 fs-5" style={{ color: '#f06548' }}></i>
                                     <span style={{ fontSize: '.82rem', color: '#495057' }}>
-                                        <strong>{navetteLines.filter(l => l.correction_flag).length} ligne{navetteLines.filter(l => l.correction_flag).length > 1 ? 's' : ''}</strong> signalée{navetteLines.filter(l => l.correction_flag).length > 1 ? 's' : ''} par la paie — les lignes concernées sont surlignées en rouge avec le détail de la correction.
+                                        {(() => {
+                                            const signaled = navetteLines.filter(l => l.correction_status === 'signaled').length;
+                                            const corrected = navetteLines.filter(l => l.correction_status === 'corrected').length;
+                                            const parts = [];
+                                            if (signaled > 0) parts.push(`<strong>${signaled}</strong> à corriger`);
+                                            if (corrected > 0) parts.push(`<strong>${corrected}</strong> corrigée${corrected > 1 ? 's' : ''} (en attente de validation paie)`);
+                                            return <span dangerouslySetInnerHTML={{ __html: parts.join(' · ') + ' — les lignes concernées sont mises en évidence.' }} />;
+                                        })()}
                                     </span>
                                 </div>
                             )}
@@ -1791,7 +1852,7 @@ const NavetteDetailPage = () => {
 
                                             return (
                                                 <React.Fragment key={line.id}>
-                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s', background: line.correction_flag ? 'rgba(240, 101, 72, 0.08)' : 'transparent' }}>
+                                                    <tr style={{ opacity: rowOpacity, transition: 'background .15s', background: line.correction_status === 'signaled' ? 'rgba(240, 101, 72, 0.08)' : line.correction_status === 'corrected' ? 'rgba(10, 179, 156, 0.08)' : 'transparent' }}>
                                                         <td>
                                                             <button onClick={() => toggleRow(line.id)} className="btn btn-sm p-0 border-0" style={{ width: 24, height: 24, borderRadius: 6, background: isExpanded ? '#405189' : '#e9ecef', color: isExpanded ? '#fff' : '#878a99', fontSize: '.7rem', transition: 'all .2s' }}>
                                                                 <i className={isExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}></i>
@@ -1807,9 +1868,19 @@ const NavetteDetailPage = () => {
                                                             {isMutIn && hasPendingMut && <span className="badge bg-warning-subtle text-warning ms-2" style={{ fontSize: '.6rem' }}><i className="ri-time-line me-1"></i>En attente</span>}
                                                             {isMutIn && !hasPendingMut && <span className="badge bg-info-subtle text-info ms-2" style={{ fontSize: '.6rem' }}>Entrant</span>}
                                                             {!isMutOut && !isMutIn && hasPendingMut && <span className="badge bg-warning-subtle text-warning ms-2" style={{ fontSize: '.6rem' }}><i className="ri-time-line me-1"></i>Mutation</span>}
-                                                            {line.correction_flag && (
+                                                            {line.correction_status === 'signaled' && (
                                                                 <span className="badge bg-danger ms-2" style={{ fontSize: '.6rem', cursor: 'help' }} title={line.correction_comment || 'Correction demandée'}>
                                                                     <i className="ri-error-warning-line me-1"></i>À corriger
+                                                                </span>
+                                                            )}
+                                                            {line.correction_status === 'corrected' && (
+                                                                <span className="badge bg-info ms-2" style={{ fontSize: '.6rem' }}>
+                                                                    <i className="ri-check-line me-1"></i>Corrigée
+                                                                </span>
+                                                            )}
+                                                            {line.correction_status === 'validated' && (
+                                                                <span className="badge bg-success ms-2" style={{ fontSize: '.6rem' }}>
+                                                                    <i className="ri-checkbox-circle-line me-1"></i>Validée
                                                                 </span>
                                                             )}
                                                         </td>
@@ -1865,12 +1936,18 @@ const NavetteDetailPage = () => {
                                                     {isExpanded && (
                                                         <tr className="expand-row">
                                                             <td colSpan={12} style={{ padding: '14px 16px 14px 48px' }}>
-                                                                {line.correction_flag && (
+                                                                {(line.correction_status === 'signaled' || line.correction_status === 'corrected') && (
                                                                     <div className="alert alert-danger d-flex align-items-start mb-3 py-2 px-3" style={{ fontSize: '.78rem', borderLeft: '4px solid #f06548' }}>
                                                                         <i className="ri-error-warning-fill me-2 fs-5" style={{ color: '#f06548' }}></i>
                                                                         <div>
-                                                                            <strong>Correction demandée par la paie :</strong>
+                                                                            <strong>Signalement paie{line.correction_status === 'corrected' ? ' (corrigée)' : ''} :</strong>
                                                                             <p className="mb-0 mt-1">{line.correction_comment || 'Aucun commentaire'}</p>
+                                                                            {line.correction_response && (
+                                                                                <div className="mt-2 p-2" style={{ background: 'rgba(10,179,156,.08)', borderRadius: 6, borderLeft: '3px solid #0ab39c' }}>
+                                                                                    <strong style={{ color: '#0ab39c' }}>Réponse service :</strong>
+                                                                                    <p className="mb-0 mt-1">{line.correction_response}</p>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 )}
