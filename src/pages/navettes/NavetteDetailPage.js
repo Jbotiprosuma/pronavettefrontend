@@ -1092,7 +1092,7 @@ const NavetteDetailPage = () => {
                     >
                         <option value=""></option>
                         <optgroup label="Primes courantes">
-                            {['PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE', 'PRIME DE PANIER', 'PRIME DE TRANSPORT DE NUIT'].map(type => (
+                            {['PRIME CAISSE', 'PRIME IMPOSABLE', 'PRIME ASTREINTE', 'PRIME DE FRAIS', 'PRIME TENUE', 'PRIME INVENTAIRE'].map(type => (
                                 <option key={type} value={type}>{type}</option>
                             ))}
                         </optgroup>
