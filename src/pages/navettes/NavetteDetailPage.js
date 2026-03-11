@@ -526,190 +526,7 @@ const NavetteDetailPage = () => {
         });
     };
 
-    // ── SIGNALEMENT PROFESSIONNEL ──
-    const [isSignalementModalOpen, setIsSignalementModalOpen] = useState(false);
-    const [signalementSelections, setSignalementSelections] = useState({}); // { [navette_ligne_id]: { checked: bool, comment: string } }
 
-    const openSignalementModal = () => {
-        const selections = {};
-        navetteLines.forEach(line => {
-            selections[line.id] = {
-                checked: !!line.correction_flag,
-                comment: line.correction_comment || ''
-            };
-        });
-        setSignalementSelections(selections);
-        setIsSignalementModalOpen(true);
-    };
-
-    const handleSignalementToggle = (lineId) => {
-        setSignalementSelections(prev => ({
-            ...prev,
-            [lineId]: { ...prev[lineId], checked: !prev[lineId]?.checked }
-        }));
-    };
-
-    const handleSignalementComment = (lineId, comment) => {
-        setSignalementSelections(prev => ({
-            ...prev,
-            [lineId]: { ...prev[lineId], comment }
-        }));
-    };
-
-    const handleSignalementSubmit = async () => {
-        const lignesSignalees = Object.entries(signalementSelections)
-            .filter(([, v]) => v.checked)
-            .map(([id, v]) => ({ navette_ligne_id: parseInt(id), comment: v.comment || '' }));
-
-        if (lignesSignalees.length === 0) {
-            Swal.fire('Attention', 'Veuillez sélectionner au moins une ligne à signaler.', 'warning');
-            return;
-        }
-
-        const hasEmptyComments = lignesSignalees.some(l => !l.comment || !l.comment.trim());
-        if (hasEmptyComments) {
-            Swal.fire('Attention', 'Veuillez ajouter un commentaire pour chaque ligne signalée.', 'warning');
-            return;
-        }
-
-        const result = await Swal.fire({
-            title: `Signaler ${lignesSignalees.length} ligne${lignesSignalees.length > 1 ? 's' : ''} ?`,
-            text: "L'état navette sera renvoyé au manager pour correction.",
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Confirmer le signalement',
-            cancelButtonText: 'Annuler',
-        });
-
-        if (!result.isConfirmed) return;
-
-        try {
-            await api.put(`navettes/${navette.id}/signaler`, { lignes: lignesSignalees });
-            Swal.fire('Succès', 'Signalement envoyé avec succès !', 'success');
-            setIsSignalementModalOpen(false);
-            await fetchNavetteData();
-        } catch (error) {
-            Swal.fire('Erreur', error.response?.data?.message || 'Impossible de signaler le problème.', 'error');
-        }
-    };
-
-    const renderSignalementModal = () => {
-        const selectedCount = Object.values(signalementSelections).filter(v => v.checked).length;
-
-        return (
-            <Modal isOpen={isSignalementModalOpen} onRequestClose={() => setIsSignalementModalOpen(false)}
-                style={{ ...subModalStyles, content: { ...subModalStyles.content, maxWidth: '780px' } }}
-                contentLabel="Signaler des corrections">
-                <div className="modal-hdr" style={{ background: 'linear-gradient(135deg, #f06548, #d9534f)' }}>
-                    <div className="d-flex align-items-center gap-3">
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <i className="ri-error-warning-line" style={{ fontSize: '1.2rem', color: '#fff' }}></i>
-                        </div>
-                        <div>
-                            <h5 className="mb-0 text-white" style={{ fontSize: '1.05rem', fontWeight: 700 }}>Signaler des corrections</h5>
-                            <span style={{ color: 'rgba(255,255,255,.7)', fontSize: '.75rem' }}>Sélectionnez les lignes à corriger et ajoutez vos commentaires</span>
-                        </div>
-                    </div>
-                    <button onClick={() => setIsSignalementModalOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: '.9rem', cursor: 'pointer' }}>✕</button>
-                </div>
-                <div className="modal-body-c" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                    {/* Summary bar */}
-                    <div className="d-flex align-items-center justify-content-between mb-3 p-2" style={{ background: '#f8f9fa', borderRadius: 10 }}>
-                        <span style={{ fontSize: '.82rem', color: '#495057', fontWeight: 600 }}>
-                            <i className="ri-checkbox-multiple-line me-1 text-primary"></i>
-                            {selectedCount} ligne{selectedCount > 1 ? 's' : ''} sélectionnée{selectedCount > 1 ? 's' : ''}
-                        </span>
-                        <span style={{ fontSize: '.75rem', color: '#878a99' }}>{navetteLines.length} employés au total</span>
-                    </div>
-
-                    {/* Lines list */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {navetteLines.map(line => {
-                            const sel = signalementSelections[line.id] || { checked: false, comment: '' };
-                            const emp = line.employer;
-                            return (
-                                <div key={line.id} style={{
-                                    border: sel.checked ? '2px solid #f06548' : '1.5px solid #e9ecef',
-                                    borderRadius: 12, padding: '12px 16px',
-                                    background: sel.checked ? '#fef2f0' : '#fff',
-                                    transition: 'all .2s',
-                                }}>
-                                    <div className="d-flex align-items-center gap-3">
-                                        <input type="checkbox" className="form-check-input"
-                                            checked={sel.checked}
-                                            onChange={() => handleSignalementToggle(line.id)}
-                                            style={{ width: 20, height: 20, cursor: 'pointer' }}
-                                        />
-                                        <div style={{ flex: 1 }}>
-                                            <div className="d-flex align-items-center gap-2">
-                                                <span className="fw-semibold" style={{ fontSize: '.85rem' }}>{emp.nom} {emp.prenom}</span>
-                                                <code style={{ fontSize: '.72rem', background: '#f0f2f5', padding: '1px 6px', borderRadius: 4 }}>{emp.matricule}</code>
-                                                <span className={`badge rounded-pill ${line.status === 'Cadre' ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`} style={{ fontSize: '.62rem' }}>{line.status}</span>
-                                            </div>
-                                            <div className="d-flex gap-3 mt-1" style={{ fontSize: '.72rem', color: '#878a99' }}>
-                                                <span>Jours: {line.nb_jours}</span>
-                                                <span>Abs: {line.nb_jour_abs || 0}</span>
-                                                <span>Acompte: {line.accompte ? `${line.accompte.toLocaleString()} F` : '—'}</span>
-                                                <span>P.Nuit: {line.prime_nuit || '—'}</span>
-                                            </div>
-                                        </div>
-                                        {sel.checked && <i className="ri-error-warning-fill text-danger" style={{ fontSize: '1.1rem' }}></i>}
-                                    </div>
-                                    {sel.checked && (
-                                        <div className="mt-2" style={{ marginLeft: 36 }}>
-                                            <textarea
-                                                className="form-control"
-                                                placeholder="Décrivez le problème constaté sur cette ligne..."
-                                                value={sel.comment}
-                                                onChange={(e) => handleSignalementComment(line.id, e.target.value)}
-                                                rows={2}
-                                                style={{ fontSize: '.82rem', borderColor: '#f06548', borderRadius: 8, resize: 'vertical' }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-                {/* Footer */}
-                <div style={{ padding: '14px 24px', borderTop: '1px solid #e9ecef', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '.78rem', color: '#878a99' }}>
-                        {selectedCount > 0 ? <><i className="ri-error-warning-line text-danger me-1"></i>{selectedCount} correction{selectedCount > 1 ? 's' : ''} à envoyer</> : 'Aucune ligne sélectionnée'}
-                    </span>
-                    <div className="d-flex gap-2">
-                        <button className="btn btn-light btn-sm" style={{ borderRadius: 8 }} onClick={() => setIsSignalementModalOpen(false)}>Annuler</button>
-                        <button className="btn btn-danger btn-sm" style={{ borderRadius: 8 }} disabled={selectedCount === 0} onClick={handleSignalementSubmit}>
-                            <i className="ri-send-plane-fill me-1"></i>Envoyer le signalement
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-        );
-    };
-
-    const handleCloseNavette = async () => {
-        Swal.fire({
-            title: 'Clôturer la navette ?',
-            text: "Cette action clôturera définitivement la navette. Êtes-vous sûr ?",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Oui, clôturer!',
-            cancelButtonText: 'Annuler'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    await api.put(`navettes/${navette.id}/close`);
-                    Swal.fire('Succès', 'Navette clôturée avec succès!', 'success');
-                    await fetchNavetteData();
-                } catch (error) {
-                    Swal.fire('Erreur', error.response?.data?.message || 'Impossible de clôturer la navette.', 'error');
-                }
-            }
-        });
-    };
 
     // --- MUTATION : Pré-calcul et ouverture du modal ---
     const handleOpenMutationModal = (navetteLigne) => {
@@ -1900,16 +1717,7 @@ const NavetteDetailPage = () => {
                                         <i className="ri-send-plane-fill me-1"></i>Confirmer & transmettre à la Paie
                                     </button>
                                 )}
-                                {navette.etat === "En attente du traitement de l'etat navette par la paie" && (
-                                    <>
-                                        <button type="button" className="btn btn-sm btn-danger" onClick={openSignalementModal}>
-                                            <i className="ri-error-warning-line me-1"></i>Signaler des corrections
-                                        </button>
-                                        <button type="button" className="btn btn-sm btn-success" onClick={handleCloseNavette}>
-                                            <i className="ri-checkbox-circle-line me-1"></i>Clôturer la navette
-                                        </button>
-                                    </>
-                                )}
+
                             </div>
                         </div>
                     </div>
@@ -2149,7 +1957,6 @@ const NavetteDetailPage = () => {
             </Layout>
 
             {renderActionModal()}
-            {renderSignalementModal()}
             {renderAbModal()}
             {renderAccompteModal()}
             {renderHeureModal()}
