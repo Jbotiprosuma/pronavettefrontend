@@ -102,6 +102,10 @@ const NavetteDetailPage = () => {
     const [expandedRows, setExpandedRows] = useState({});
     const [tableSearch, setTableSearch] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'nom', dir: 'asc' });
+    const [isCorrectionResponseModalOpen, setIsCorrectionResponseModalOpen] = useState(false);
+    const [correctionResponses, setCorrectionResponses] = useState({});
+    const [correctionResponseSearch, setCorrectionResponseSearch] = useState('');
+    const [sendingCorrections, setSendingCorrections] = useState(false);
 
     // const fetchNavetteData = useCallback(async () => {
     //     try {
@@ -506,46 +510,10 @@ const NavetteDetailPage = () => {
         const correctedLines = navetteLines.filter(l => l.correction_status === 'corrected' || l.correction_status === 'signaled');
         
         if (correctedLines.length > 0) {
-            // Build HTML for response comments per corrected line
-            const linesHtml = correctedLines.map(l => 
-                `<div style="text-align:left;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;border-left:3px solid ${l.correction_status === 'corrected' ? '#0ab39c' : '#f06548'}">
-                    <strong>${l.employer.matricule} — ${l.employer.nom} ${l.employer.prenom}</strong>
-                    <span class="badge" style="background:${l.correction_status === 'corrected' ? '#0ab39c' : '#f06548'};color:#fff;font-size:.65rem;margin-left:6px">${l.correction_status === 'corrected' ? 'Corrigée' : 'Signalée'}</span>
-                    <div style="font-size:.8rem;color:#6c757d;margin-top:4px"><em>Signalement : ${l.correction_comment || 'Aucun commentaire'}</em></div>
-                    <textarea id="resp_${l.id}" class="swal2-textarea" placeholder="Réponse optionnelle..." style="width:100%;margin-top:6px;font-size:.82rem;min-height:50px;border-radius:6px"></textarea>
-                </div>`
-            ).join('');
-            
-            const result = await Swal.fire({
-                title: 'Envoyer à la paie',
-                html: `<p style="font-size:.85rem;color:#495057">Vous avez <strong>${correctedLines.length} ligne(s) avec corrections</strong>. Vous pouvez ajouter une réponse pour chaque ligne :</p>${linesHtml}`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: '<i class="ri-send-plane-fill me-1"></i>Envoyer',
-                cancelButtonText: 'Annuler',
-                width: 600,
-                preConfirm: () => {
-                    return correctedLines.map(l => ({
-                        navette_ligne_id: l.id,
-                        response: document.getElementById(`resp_${l.id}`)?.value?.trim() || ''
-                    })).filter(r => r.response);
-                }
-            });
-            
-            if (result.isConfirmed) {
-                try {
-                    await api.put(`navettes/${navette.id}/send-to-payroll`, {
-                        lignes_responses: result.value
-                    });
-                    Swal.fire('Succès', 'Navette envoyée à la paie avec les réponses aux corrections!', 'success');
-                    await fetchNavetteData();
-                } catch (error) {
-                    console.error('Erreur lors de l\'envoi à la paie :', error.response?.data?.message || error.message);
-                    Swal.fire('Erreur', error.response?.data?.message || 'Impossible d\'envoyer la navette à la paie.', 'error');
-                }
-            }
+            // Ouvrir le modal élégant pour les réponses aux corrections
+            setCorrectionResponses({});
+            setCorrectionResponseSearch('');
+            setIsCorrectionResponseModalOpen(true);
         } else {
             Swal.fire({
                 title: 'Envoyer à la paie ?',
@@ -568,6 +536,24 @@ const NavetteDetailPage = () => {
                     }
                 }
             });
+        }
+    };
+
+    const handleCorrectionResponseSubmit = async () => {
+        setSendingCorrections(true);
+        try {
+            const lignes_responses = Object.entries(correctionResponses)
+                .filter(([, response]) => response.trim())
+                .map(([navette_ligne_id, response]) => ({ navette_ligne_id: parseInt(navette_ligne_id), response: response.trim() }));
+            await api.put(`navettes/${navette.id}/send-to-payroll`, { lignes_responses });
+            setIsCorrectionResponseModalOpen(false);
+            Swal.fire('Succès', 'Navette envoyée à la paie avec les réponses aux corrections!', 'success');
+            await fetchNavetteData();
+        } catch (error) {
+            console.error('Erreur lors de l\'envoi à la paie :', error.response?.data?.message || error.message);
+            Swal.fire('Erreur', error.response?.data?.message || 'Impossible d\'envoyer la navette à la paie.', 'error');
+        } finally {
+            setSendingCorrections(false);
         }
     };
 
@@ -1506,6 +1492,145 @@ const NavetteDetailPage = () => {
         </Modal>
     );
 
+    const renderCorrectionResponseModal = () => {
+        const correctedLines = navetteLines.filter(l => l.correction_status === 'corrected' || l.correction_status === 'signaled');
+        const q = correctionResponseSearch.toLowerCase();
+        const filteredCorrLines = q
+            ? correctedLines.filter(l => `${l.employer.matricule} ${l.employer.nom} ${l.employer.prenom}`.toLowerCase().includes(q))
+            : correctedLines;
+        const nbCorr = correctedLines.filter(l => l.correction_status === 'corrected').length;
+        const nbSig = correctedLines.filter(l => l.correction_status === 'signaled').length;
+        const nbResp = Object.values(correctionResponses).filter(v => v.trim()).length;
+
+        return (
+            <Modal isOpen={isCorrectionResponseModalOpen} onRequestClose={() => !sendingCorrections && setIsCorrectionResponseModalOpen(false)} style={{
+                content: { ...customModalStyles.content, maxWidth: '780px', maxHeight: '92vh' },
+                overlay: { ...customModalStyles.overlay }
+            }} contentLabel="Réponses aux corrections">
+                {/* Header */}
+                <div style={{ background: 'linear-gradient(135deg, #405189 0%, #0ab39c 100%)', padding: '20px 24px', color: '#fff' }}>
+                    <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 className="mb-1 d-flex align-items-center gap-2" style={{ fontWeight: 700 }}>
+                                <i className="ri-send-plane-fill"></i> Envoyer à la paie
+                            </h5>
+                            <p className="mb-0" style={{ fontSize: '.82rem', opacity: .85 }}>Ajoutez une réponse optionnelle pour chaque ligne corrigée avant l'envoi</p>
+                        </div>
+                        <button onClick={() => !sendingCorrections && setIsCorrectionResponseModalOpen(false)} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', width: 34, height: 34, borderRadius: 10, fontSize: '1rem', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                    </div>
+                    {/* Stats */}
+                    <div className="d-flex gap-3 mt-3">
+                        {nbCorr > 0 && (
+                            <div style={{ background: 'rgba(255,255,255,.15)', borderRadius: 10, padding: '6px 14px', fontSize: '.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <i className="ri-check-double-line"></i> {nbCorr} corrigée{nbCorr > 1 ? 's' : ''}
+                            </div>
+                        )}
+                        {nbSig > 0 && (
+                            <div style={{ background: 'rgba(240,101,72,.3)', borderRadius: 10, padding: '6px 14px', fontSize: '.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <i className="ri-error-warning-line"></i> {nbSig} en attente
+                            </div>
+                        )}
+                        {nbResp > 0 && (
+                            <div style={{ background: 'rgba(255,255,255,.2)', borderRadius: 10, padding: '6px 14px', fontSize: '.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <i className="ri-chat-3-line"></i> {nbResp} réponse{nbResp > 1 ? 's' : ''}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+                    {/* Search */}
+                    <div className="position-relative mb-3">
+                        <i className="ri-search-line position-absolute" style={{ left: 12, top: '50%', transform: 'translateY(-50%)', color: '#878a99', fontSize: '.85rem' }}></i>
+                        <input type="text" className="form-control form-control-sm" placeholder="Rechercher par matricule, nom ou prénom..." value={correctionResponseSearch} onChange={e => setCorrectionResponseSearch(e.target.value)} style={{ paddingLeft: 34, borderRadius: 10, fontSize: '.82rem', border: '1px solid #e9ecef', background: '#f8f9fa' }} />
+                    </div>
+
+                    {/* Lines list */}
+                    <div className="d-flex flex-column gap-3">
+                        {filteredCorrLines.map(line => {
+                            const isCorr = line.correction_status === 'corrected';
+                            return (
+                                <div key={line.id} style={{ borderRadius: 12, border: `1px solid ${isCorr ? 'rgba(10,179,156,.25)' : 'rgba(240,101,72,.25)'}`, background: isCorr ? 'rgba(10,179,156,.03)' : 'rgba(240,101,72,.03)', overflow: 'hidden' }}>
+                                    {/* Line header */}
+                                    <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${isCorr ? 'rgba(10,179,156,.12)' : 'rgba(240,101,72,.12)'}` }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: isCorr ? 'linear-gradient(135deg, #0ab39c, #099885)' : 'linear-gradient(135deg, #f06548, #d94e33)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '.85rem', flexShrink: 0 }}>
+                                            {line.employer.nom.charAt(0)}{line.employer.prenom.charAt(0)}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div className="fw-semibold" style={{ fontSize: '.88rem' }}>{line.employer.nom} {line.employer.prenom}</div>
+                                            <div style={{ fontSize: '.75rem', color: '#878a99' }}>
+                                                <code style={{ background: '#f0f2f5', padding: '1px 5px', borderRadius: 4, fontSize: '.72rem' }}>{line.employer.matricule}</code>
+                                                <span className="mx-2">·</span>
+                                                <span className={`badge rounded-pill ${line.status === 'Cadre' ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`} style={{ fontSize: '.62rem' }}>{line.status}</span>
+                                            </div>
+                                        </div>
+                                        <span className={`badge rounded-pill ${isCorr ? 'bg-info-subtle text-info' : 'bg-danger-subtle text-danger'}`} style={{ fontSize: '.68rem', padding: '4px 10px' }}>
+                                            <i className={`${isCorr ? 'ri-check-line' : 'ri-error-warning-line'} me-1`}></i>
+                                            {isCorr ? 'Corrigée' : 'En attente'}
+                                        </span>
+                                    </div>
+
+                                    {/* Signalement info */}
+                                    <div style={{ padding: '10px 16px', background: 'rgba(240,101,72,.05)', borderBottom: '1px solid rgba(0,0,0,.04)' }}>
+                                        <div style={{ fontSize: '.72rem', fontWeight: 600, color: '#f06548', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>
+                                            <i className="ri-chat-quote-line me-1"></i>Signalement paie
+                                        </div>
+                                        <p className="mb-0" style={{ fontSize: '.82rem', color: '#495057', fontStyle: 'italic' }}>
+                                            {line.correction_comment || 'Aucun commentaire'}
+                                        </p>
+                                    </div>
+
+                                    {/* Response textarea */}
+                                    <div style={{ padding: '12px 16px' }}>
+                                        <label style={{ fontSize: '.75rem', fontWeight: 600, color: '#405189', marginBottom: 6, display: 'block' }}>
+                                            <i className="ri-reply-line me-1"></i>Votre réponse <span style={{ fontWeight: 400, color: '#878a99' }}>(optionnelle)</span>
+                                        </label>
+                                        <textarea
+                                            className="form-control"
+                                            placeholder="Décrivez les corrections apportées ou ajoutez un commentaire..."
+                                            value={correctionResponses[line.id] || ''}
+                                            onChange={e => setCorrectionResponses(prev => ({ ...prev, [line.id]: e.target.value }))}
+                                            style={{ fontSize: '.82rem', borderRadius: 10, border: '1px solid #e9ecef', resize: 'vertical', minHeight: 60, background: '#fafbfc' }}
+                                            rows={2}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {filteredCorrLines.length === 0 && correctionResponseSearch && (
+                        <div className="text-center py-4" style={{ color: '#878a99', fontSize: '.85rem' }}>
+                            <i className="ri-search-line d-block mb-2" style={{ fontSize: '1.5rem' }}></i>
+                            Aucun résultat pour « {correctionResponseSearch} »
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #e9ecef', background: '#fafbfc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '0 0 16px 16px' }}>
+                    <div style={{ fontSize: '.78rem', color: '#878a99' }}>
+                        {correctedLines.length} ligne{correctedLines.length > 1 ? 's' : ''} signalée{correctedLines.length > 1 ? 's' : ''}
+                        {nbResp > 0 && <span> · <strong className="text-primary">{nbResp} réponse{nbResp > 1 ? 's' : ''}</strong></span>}
+                    </div>
+                    <div className="d-flex gap-2">
+                        <button className="btn btn-light btn-sm" onClick={() => setIsCorrectionResponseModalOpen(false)} disabled={sendingCorrections} style={{ borderRadius: 10, fontSize: '.82rem', padding: '6px 16px' }}>
+                            Annuler
+                        </button>
+                        <button className="btn btn-primary btn-sm" onClick={handleCorrectionResponseSubmit} disabled={sendingCorrections} style={{ borderRadius: 10, fontSize: '.82rem', padding: '6px 20px', background: 'linear-gradient(135deg, #405189, #0ab39c)', border: 'none', boxShadow: '0 2px 8px rgba(64,81,137,.25)' }}>
+                            {sendingCorrections ? (
+                                <><span className="spinner-border spinner-border-sm me-2"></span>Envoi en cours...</>
+                            ) : (
+                                <><i className="ri-send-plane-fill me-1"></i>Confirmer & envoyer à la paie</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        );
+    };
+
     const sortedNavetteLines = [...navetteLines].sort((a, b) => {
         // Priorité correction : signaled/rejected → top, corrected → next, others → bottom
         const corrPriority = (l) => {
@@ -1533,6 +1658,16 @@ const NavetteDetailPage = () => {
             });
         }
         list.sort((a, b) => {
+            // Priorité correction : lignes signalées/corrigées toujours en haut
+            const corrPri = (l) => {
+                if (l.correction_status === 'signaled') return 0;
+                if (l.correction_status === 'corrected') return 1;
+                if (l.correction_status === 'validated') return 2;
+                return 3;
+            };
+            const pa = corrPri(a), pb = corrPri(b);
+            if (pa !== pb) return pa - pb;
+
             const { key, dir } = sortConfig;
             let va, vb;
             if (key === 'nom') { va = `${a.employer.nom} ${a.employer.prenom}`; vb = `${b.employer.nom} ${b.employer.prenom}`; }
@@ -2043,6 +2178,7 @@ const NavetteDetailPage = () => {
             {renderMutationModal()}
             {renderImageModal()}
             {renderSingleImageModal()}
+            {renderCorrectionResponseModal()}
         </>
     );
 };
