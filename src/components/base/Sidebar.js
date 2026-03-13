@@ -69,7 +69,7 @@ const Sidebar = ({ user }) => {
                                 <li className="nav-item">
                                     <NavLink to="/navettes/historique" className="nav-link menu-link" >
                                         <i className="ri-history-line"></i>
-                                        <span>Historique des campagnes</span>
+                                        <span>Historiques campagnes</span>
                                     </NavLink>
                                 </li>
                                 <li className="nav-item">
@@ -119,7 +119,7 @@ const Sidebar = ({ user }) => {
                                 <li className="nav-item">
                                     <NavLink to="/navettes/historique" className="nav-link menu-link" >
                                         <i className="ri-history-line"></i>
-                                        <span>Historique des campagnes</span>
+                                        <span>Historiques campagnes</span>
                                     </NavLink>
                                 </li>
                                 <li className="nav-item">
@@ -184,7 +184,7 @@ const Sidebar = ({ user }) => {
                                 <li className="nav-item">
                                     <NavLink to="/navettes/historique" className="nav-link menu-link" >
                                         <i className="ri-history-line"></i>
-                                        <span>Historique des campagnes</span>
+                                        <span>Historiques campagnes</span>
                                     </NavLink>
                                 </li>
                                 <li className="nav-item">
