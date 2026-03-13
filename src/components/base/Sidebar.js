@@ -67,15 +67,15 @@ const Sidebar = ({ user }) => {
                                     </NavLink>
                                 </li>
                                 <li className="nav-item">
-                                    <NavLink to="/navettes/historique" className="nav-link menu-link" >
-                                        <i className="ri-history-line"></i>
-                                        <span>Historique</span>
-                                    </NavLink>
-                                </li>
-                                <li className="nav-item">
                                     <NavLink to="/statistiques" className="nav-link menu-link" >
                                         <i className="ri-bar-chart-2-line"></i>
                                         <span>Statistiques</span>
+                                    </NavLink>
+                                </li>
+                                <li className="nav-item">
+                                    <NavLink to="/employes" className="nav-link menu-link" >
+                                        <i className=" ri-server-line"></i>
+                                        <span>Mes employés</span>
                                     </NavLink>
                                 </li>
                                 <li className="nav-item">
@@ -86,7 +86,6 @@ const Sidebar = ({ user }) => {
                                 </li>
                             </>
                         )}
-
                         {user && user.role && (user.role === "importer") && (
                             <>
                                 <li className="nav-item">
@@ -97,8 +96,6 @@ const Sidebar = ({ user }) => {
                                 </li>
                             </>
                         )}
-
-
                         {user && user.role && user.role === "admin" && (
                             <>
                                 <li className="nav-item">
